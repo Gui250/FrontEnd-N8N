@@ -1,0 +1,1699 @@
+{
+  "name": "Leads sdr AMAC - FUNCIONANDO copy",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "de08f3a9-dde8-42c0-bdd4-182a3029f81e",
+              "leftValue": "={{ $json.mensagem }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e8c5d011-994b-4b8a-9c90-035f960b50a8",
+      "name": "Filter",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": "={{ $node[\"Loop Over Items\"].context[\"done\"]}}"
+        }
+      },
+      "id": "c11f93d7-6830-41cb-9abe-8fa1d932edba",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        736,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1cba9986-342d-4bdf-b4af-94b56de82b6b",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "2c1e833d-b3a1-47fb-9c43-9635ddb17d90",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "www.instagram.com",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            },
+            {
+              "id": "57a4c36c-ce81-449f-bae2-1c0244739a89",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "https://wa.me/",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f3dc9b20-83d0-4c98-b00b-5732e07c2eeb",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        992,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://r.jina.ai/{{ $node[\"Loop Over Items\"].json[\"website\"] }}",
+        "options": {}
+      },
+      "id": "8d7608b8-a88a-4d37-8205-512d52652706",
+      "name": "Jina AI - Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1216,
+        64
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $item(\"0\").$node[\"Dados_Evolution\"].json[\"server_url\"] }}/message/sendText/{{ $item(\"0\").$node[\"Dados_Evolution\"].json[\"instancia\"] }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $item(\"0\").$node[\"Dados_Evolution\"].json[\"api_key\"] }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.telefone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $item(0).$node[\"Loop Over Items1\"].json[\"message\"] ?? \"Olá, aqui é o Luís, da AMAC Segur. Encontrei sua empresa e acredito que podemos contribuir para reforçar a segurança com soluções em CFTV, controle de acesso, interfonia e monitoramento 24h. Podemos agendar uma breve conversa para entender melhor o seu cenário?\" }}\n"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "id": "89e2363c-c304-488e-b2e2-24d83c2269e4",
+      "name": "Envia MSG Texto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2976,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "content",
+        "options": {}
+      },
+      "id": "6ef6e2ea-edf1-495d-a07e-af260a4424dd",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "id": "9fbbb760-aa5b-48d3-8328-4cdf0ed543cf",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3376,
+        160
+      ],
+      "webhookId": "72dacbaa-1e06-438a-af6d-4b8729105e70"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "id": "abaa7b2a-3b85-4fde-a787-751fae7f6280",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        528,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc2a1451-2a6d-450e-8adf-b4fc1fd342d7",
+              "name": "server_url",
+              "value": "https://evolution-evolution.peitvn.easypanel.host",
+              "type": "string"
+            },
+            {
+              "id": "31ef30af-2137-4896-b7ca-99e154646676",
+              "name": "instancia",
+              "value": "Guilherme Soares Moreno",
+              "type": "string"
+            },
+            {
+              "id": "3bf78965-9d9f-4710-8822-42b592d1533d",
+              "name": "api_key",
+              "value": "AC91AFC8C194-4DA7-8C49-A80D43A55E7E",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "56aef67c-4277-416c-9152-64a3e329a902",
+      "name": "Dados_Evolution",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        272,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6d1d590b-c9a3-480c-bc1f-705278d96300",
+              "name": "content",
+              "value": "={{ $json.message.content.messages }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bae26773-42d0-4034-8951-da7f6f3773df",
+      "name": "PegaMensagem",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1776,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# DISPARO PARA LEADS GOOGLE MAPS",
+        "height": 80,
+        "width": 700,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -912,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "a488d4ed-edb1-4c74-b741-973a09182ed3",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "# Filtra e junta os dados",
+        "height": 600,
+        "width": 840
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        80,
+        -224
+      ],
+      "typeVersion": 1,
+      "id": "de100337-5d3a-4a7b-be2f-a09eb9f05b84",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Alterar aqui",
+        "height": 260,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        208,
+        -96
+      ],
+      "typeVersion": 1,
+      "id": "ca8b75fd-55de-40ac-be53-2d179549af07",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Busca informações no site e prepara uma mensagem",
+        "height": 460,
+        "width": 1180,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        928,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "63664d69-3685-4024-9cfe-b3bf31e68804",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "# Dispara mensagens uma a uma",
+        "height": 540,
+        "width": 1480,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2128,
+        -160
+      ],
+      "typeVersion": 1,
+      "id": "3cc2b79b-65dd-4400-a667-9413b4a43847",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Alterar aqui",
+        "height": 360,
+        "width": 560,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1152,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "5591e28b-d13b-4345-9798-3f3dc2c9d0a0",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk",
+          "mode": "list",
+          "cachedResultName": "Leads Agencia 021 - Guilherme",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Página1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10L-HNkOwldPGuCHed2eHheYfXbWxLhaERqlnwAwFl90/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefone": "={{ $json.telefone }}",
+            "mensagem": "={{ $item(\"0\").$node[\"Message a model\"].json[\"message\"][\"content\"][\"messages\"].map(m => m.message).join(\" \") }}{{ $json.message.conversation }}",
+            "disparo": "sim"
+          },
+          "matchingColumns": [
+            "telefone"
+          ],
+          "schema": [
+            {
+              "id": "nome_empresa",
+              "displayName": "nome_empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "endereco",
+              "displayName": "endereco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "website",
+              "displayName": "website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "rating",
+              "displayName": "rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "reviews",
+              "displayName": "reviews",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "especialidades",
+              "displayName": "especialidades",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "mensagem",
+              "displayName": "mensagem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "disparo",
+              "displayName": "disparo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e00f522b-47e0-4ea1-8f32-7e12d991c210",
+      "name": "Atualiza planilha para sim",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2960,
+        -64
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CxZhpNATzM9grILd",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8ef42ffb-0574-4939-9ba4-1c43dea0f20e",
+              "leftValue": "={{ $json.mensagem }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -352,
+        128
+      ],
+      "id": "999fd464-f68d-41c5-aeb5-b872fb17a1c8",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        -64
+      ],
+      "id": "35a23292-7915-4a4b-a188-ab5704f7aaa8",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "content": "# Captura dados ",
+        "height": 600,
+        "width": 960,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -912,
+        -224
+      ],
+      "typeVersion": 1,
+      "id": "5b80280e-5434-414e-879f-3c083d0e1431",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk",
+          "mode": "list",
+          "cachedResultName": "Leads Agencia 021 - Guilherme",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Página1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -576,
+        128
+      ],
+      "id": "b336800b-fe7f-4187-af3f-62399ad13c98",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CxZhpNATzM9grILd",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Executa o código de geração do número aleatório\nconst min = 30;\nconst max = 60;\nconst randomNumber = Math.floor(Math.random() * (max - min + 1)) + min;\n\n// Retorna o valor em um array de objetos com a propriedade \"json\"\nreturn [\n  {\n    json: {\n      randomNumber: randomNumber,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        -80
+      ],
+      "id": "e6d2fdab-6a67-450f-810f-85f78b395a0a",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "GPT-5"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=<quem_voce_e>\nVocê é um SDR (Sales Development Representative) representando a AMAC Segur, especializada em segurança eletrônica, monitoramento 24h e automação para condomínios, empresas e academias. Sua abordagem é consultiva e humanizada, combinando experiência técnica com foco em resultados práticos e relacionamento.\n</quem_voce_e>\n\n<seu_objetivo>\nCriar uma sequência de apenas 2 mensagens de WhatsApp, altamente personalizadas, que:\n- Estabeleçam conexão imediata com o prospect\n- Apresentem um desafio ou oportunidade de forma natural\n- Introduzam as soluções da AMAC Segur de forma consultiva\n- Encerrem com convite sutil para uma reunião rápida\n</seu_objetivo>\n\n<instrucoes>\nMensagem 1 (40-70 tokens):\n- Cumprimento + nome do contato/empresa\n- Apresentação fixa: \"Sou Luís, da AMAC Segur – Segurança Eletrônica e Automação.\"\n- Menção a algo específico do negócio/segmento + rating quando disponível\n- Citar soluções da AMAC Segur começando por: \"CFTV em alta definição\", seguido de controle de acesso, interfonia e monitoramento 24h\n- Transição sutil para valor (sem empurrar reunião ainda)\n- Sem emojis\n\nMensagem 2 (40-70 tokens):\n- Destacar um benefício claro e contextual das soluções (ex.: reduzir riscos, organizar acessos, relatórios unificados, eficiência operacional)\n- Tom de parceria genuíno\n- Encerrar com: \"Se fizer sentido, posso te ligar ou marcarmos uma reunião para apresentar um plano inicial com três ações aplicáveis à {{company_name}}.\"\n- Sem emojis\n</instrucoes>\n\n<restricoes>\n- ❌ Nada de urgência artificial\n- ❌ Nada de promessas exageradas\n- ❌ Nada de jargões técnicos desnecessários\n- ❌ Nada de linguagem robótica ou genérica\n- ❌ Não usar múltiplas perguntas na mesma mensagem\n- ❌ Não usar emojis\n</restricoes>\n\n<importante>\nDados obrigatórios no campo 'user':\n- Nome da empresa\n- Segmento\n- Rating (quando disponível)\n- Observações específicas do site ou redes sociais\n- Dados únicos coletados no scraping\n</importante>\n\n<saida>\njson[\n  {\n    \"part\": 1,\n    \"message\": \"Olá, {{contact_name}}. Sou Luís, da AMAC Segur – Segurança Eletrônica e Automação. Vi a {{company_name}} no segmento de academias (rating {{rating}}) e notei {{obs_especifica}}. Atuamos com CFTV em alta definição, controle de acesso por biometria/QR Code, interfonia e monitoramento 24h. A partir de {{dado_unico}}, vejo ganhos práticos e sustentáveis para a sua operação.\"\n  },\n  {\n    \"part\": 2,\n    \"message\": \"Em academias, nossas soluções reduzem riscos, organizam acessos e trazem relatórios unificados para mais eficiência. Se fizer sentido, posso te ligar ou marcarmos uma reunião para apresentar um plano inicial com três ações aplicáveis à {{company_name}}.\"\n  }\n]\n</saida>\n",
+              "role": "system"
+            },
+            {
+              "content": "=Nome da empresa: {{ $item(\"0\").$node[\"Loop Over Items\"].json[\"nome_empresa\"] }}\nScraper do site da empresa: {{ $json.data }}\nRating no Google:{{ $item(\"0\").$node[\"Loop Over Items\"].json[\"rating\"] }}\nReviews no google:  {{ $item(\"0\").$node[\"Loop Over Items\"].json[\"reviews\"] }}\nEspecialidades: {{ $item(\"0\").$node[\"Loop Over Items\"].json[\"especialidades\"] }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "id": "a1281396-7f8b-464b-8b1d-9152dff3933e",
+      "name": "Message a model",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [
+        1440,
+        176
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "boJL796C5UU6ctPr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "c350dfad-ce64-4535-b806-905c72ecef28",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        -1168
+      ],
+      "id": "c40f4516-c4c0-4862-ba31-c0cd91c6cb4c",
+      "name": "Webhook",
+      "webhookId": "c350dfad-ce64-4535-b806-905c72ecef28"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "78f34ae6-559a-44d5-bb2e-90a22caa6d93",
+              "name": "remote_jid_12",
+              "value": "={{ \n  (() => {\n    const tel = String($json.telefone_original).replace(/\\D/g, '');\n    const ddd = tel.slice(0, 2);\n    let numero = tel.slice(2);\n\n    // Remove o 9 só se ele estiver no início do número\n    if (numero.startsWith('9') && numero.length === 9) {\n      numero = numero.slice(1);\n    }\n\n    return `55${ddd}${numero}@s.whatsapp.net`;\n  })() \n}}",
+              "type": "string"
+            },
+            {
+              "id": "9d3dfda4-9461-4da1-9efa-ad5744ac48ff",
+              "name": "remote_jid_13",
+              "value": "={{ \n  (() => {\n    const tel = String($json.telefone_original).replace(/\\D/g, '');\n    const ddd = tel.slice(0, 2);\n    let numero = tel.slice(2);\n\n    // Adiciona o 9 apenas se ainda não começar com 9\n    if (!numero.startsWith('9')) {\n      numero = '9' + numero;\n    }\n\n    return `55${ddd}${numero}@s.whatsapp.net`;\n  })()\n}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        -1136
+      ],
+      "id": "1ebe8dee-fcb7-4683-9f4e-1c0f7412922c",
+      "name": "SETA_12_13"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('DADOS').item.json.url_do_evolution }}/chat/whatsappNumbers/{{ $('DADOS').item.json.instancia_evolution }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('DADOS').item.json.api_key_evolution }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"numbers\": [\"{{ $('SETA_12_13').first().json.remote_jid_12.trim() }}\"]\n}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1024,
+        -1136
+      ],
+      "id": "c9e7fc00-797f-4d31-9099-1dac085b9e2d",
+      "name": "Check JID 12",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('DADOS').item.json.url_do_evolution }}/chat/whatsappNumbers/{{ $('DADOS').first().json.instancia_evolution }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('DADOS').item.json.api_key_evolution }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"numbers\": [\"{{ $('SETA_12_13').item.json.remote_jid_13.trim() }}\"]\n}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        -1056
+      ],
+      "id": "3e4e8f0b-f4e2-418c-a987-9d70ad4d9702",
+      "name": "Check JID 13",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk",
+          "mode": "list",
+          "cachedResultName": "Leads Agencia 021 - Guilherme",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Página1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1qiek_QzsZPNzC4DYGEkYK_luMLN2M4svjY_AAREdNW8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome_empresa": "={{ $('Loop Over Items3').item.json.nome_empresa }}",
+            "telefone": "={{ $('If3').first().json.jid }}",
+            "endereco": "={{ $('Loop Over Items3').item.json.endereco }}",
+            "website": "={{ $('Loop Over Items3').item.json.website }}",
+            "rating": "={{ $('Loop Over Items3').item.json.rating }}",
+            "reviews": "={{ $('Loop Over Items3').item.json.reviews }}",
+            "especialidades": "={{ $('Loop Over Items3').item.json.especialidades }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nome_empresa",
+              "displayName": "nome_empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "endereco",
+              "displayName": "endereco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "website",
+              "displayName": "website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "rating",
+              "displayName": "rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviews",
+              "displayName": "reviews",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "especialidades",
+              "displayName": "especialidades",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "mensagem",
+              "displayName": "mensagem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "disparo",
+              "displayName": "disparo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        2560,
+        -800
+      ],
+      "id": "8535abff-1061-4bbd-9264-cc8a39252aa2",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CxZhpNATzM9grILd",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f54ace6d-93b9-4219-b7bc-c01baabc41ad",
+              "name": "url_do_evolution",
+              "value": "https://evolution-evolution.peitvn.easypanel.host",
+              "type": "string"
+            },
+            {
+              "id": "ed523a0c-b1d7-4d15-957e-e08b22c64143",
+              "name": "api_key_evolution",
+              "value": "AC91AFC8C194-4DA7-8C49-A80D43A55E7E",
+              "type": "string"
+            },
+            {
+              "id": "8e88f47d-aef0-4c73-bcb9-025aebfc837b",
+              "name": "instancia_evolution",
+              "value": "Guilherme Soares Moreno",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -144,
+        -1168
+      ],
+      "id": "dcb8eea3-e1d4-41f8-a8c0-ed349daab044",
+      "name": "DADOS"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9949dc12-7010-4366-9596-a8412e0f7797",
+              "leftValue": "={{ Object.keys($json).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2064,
+        -1040
+      ],
+      "id": "a28a4312-cb00-4418-bba3-1a7e279e59bc",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "content": "## Alterar AQUI",
+        "height": 320,
+        "width": 260,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2480,
+        -880
+      ],
+      "id": "812ec822-adf6-4d30-9996-8b8255323094",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Adaptado para funcionar corretamente no n8n\n\n// Pega os dados do body enviado pelo Webhook\nconst empresas = items[0].json.body || [];\n\nreturn empresas.map(emp => {\n  // Remove tudo que não for dígito\n  const apenasDigitos = String(emp.telefone || '').replace(/\\D/g, '');\n\n  // Garante que comece com 55\n  const comPais = apenasDigitos.startsWith('55')\n    ? apenasDigitos\n    : `55${apenasDigitos}`;\n\n  // Gera jid_12 e jid_13 corretamente\n  const ddd = comPais.slice(2, 4);\n  const numeroSemDDD = comPais.slice(4);\n\n  const jid_12 = `${comPais}@s.whatsapp.net`;\n  const jid_13 = `55${ddd}9${numeroSemDDD}@s.whatsapp.net`;\n\n  return {\n    json: {\n      nome_empresa: emp.nome_empresa || '',\n      endereco: emp.endereco || '',\n      website: emp.website || '',\n      rating: emp.rating || '',\n      reviews: emp.reviews || '',\n      especialidades: emp.especialidades || '',\n      telefone_original: emp.telefone || '',\n      jid_12,\n      jid_13\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        -1168
+      ],
+      "id": "b7df5505-88ea-4b0b-acbb-85f77033796f",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "content": "## Extrator Evolua Pró",
+        "height": 924,
+        "width": 3984,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        -1440
+      ],
+      "id": "feec3e2a-d3f3-4070-b7d3-0e7764c769b8",
+      "name": "Sticky Note13"
+    },
+    {
+      "parameters": {
+        "content": "# ABASTECIMENTO Extrator Pró",
+        "height": 80,
+        "width": 600,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -768,
+        -1440
+      ],
+      "typeVersion": 1,
+      "id": "35c29475-3d09-4fb6-bf07-0c27875e38a0",
+      "name": "Sticky Note14"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        176,
+        -1168
+      ],
+      "id": "90f1242d-2a52-4853-b975-b130b743a853",
+      "name": "Loop Over Items3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "aa10db6d-a9eb-4fe4-b9ef-d187369e2b5e",
+              "leftValue": "={{ $json.exists }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1312,
+        -1296
+      ],
+      "id": "3ca92403-ee91-43bd-bf56-653bb20152c9",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fbe31f74-4905-47a1-bda3-635a665a8ed5",
+              "leftValue": "={{ $json.exists }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        -912
+      ],
+      "id": "43e89cfb-c876-499b-bf10-3969f664c14f",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "content": "## Alterar AQUI",
+        "height": 320,
+        "width": 260,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -1280
+      ],
+      "id": "c8b4caf3-c921-4422-beb3-b2638cf5e20e",
+      "name": "Sticky Note15"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2800,
+        -800
+      ],
+      "id": "c39907f3-9e59-4d33-90c1-be282575a985",
+      "name": "Wait3",
+      "webhookId": "a4123c95-615b-481a-9a1c-14dbb976182b"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk",
+          "mode": "list",
+          "cachedResultName": "Leads Agencia 021 - Guilherme",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/197vPoey7d0hOvgnxlCzxzAXSPYMOc_DPpxIuaQG9Gwk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Página1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10L-HNkOwldPGuCHed2eHheYfXbWxLhaERqlnwAwFl90/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "telefone",
+              "lookupValue": "={{ $json.jid }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1968,
+        -1296
+      ],
+      "id": "42487ac9-60e9-4dcb-9c67-df4686f39e4e",
+      "name": "Get row(s) in sheet1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CxZhpNATzM9grILd",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Alterar AQUI",
+        "height": 320,
+        "width": 260,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        -1392
+      ],
+      "id": "1fe7492d-3dbb-4781-97a4-87258e408f43",
+      "name": "Sticky Note16"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2064,
+        -800
+      ],
+      "id": "ecee4ea1-dfda-49c5-ad30-47a3de7b6490",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2208,
+        256
+      ],
+      "id": "9c4adf6a-25c5-46d1-b865-7b34e8db5c61",
+      "name": "Wait2",
+      "webhookId": "4c4f9c9a-d6c1-4d72-a22f-992e7b7cd8ec",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ce723d0d-a280-414f-aec3-85c940f7dc6f",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -880,
+        128
+      ],
+      "id": "4be50445-11cb-4a16-9cd8-ab692a7a4c1d",
+      "name": "Webhook1",
+      "webhookId": "ce723d0d-a280-414f-aec3-85c940f7dc6f"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3184,
+        160
+      ],
+      "id": "e5c3642f-9338-48a9-8873-5a82c9cb2a1f",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const leads = $('Get row(s) in sheet').all(); \n\nconst newItems = []; \n\nfor(const lead of leads) {\n  const telefone = lead.json.telefone;\n  const website = lead.json.website; \n  const nomeEmpresa = lead.json.nome_empresa; \n\n  newItems.push({\n    json: {\n      telefone: telefone,\n      website: website, \n      nome_empresa: nomeEmpresa\n    }\n  });\n}\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2336,
+        -64
+      ],
+      "id": "08d7bdf3-7b0c-4088-a0d0-7b82bb2827fa",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2464,
+        176
+      ],
+      "id": "96de0b78-7429-4979-9537-3cb2871ef1c6",
+      "name": "Loop Over Items1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Dados_Evolution",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Jina AI - Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jina AI - Scraper": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia MSG Texto": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados_Evolution": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PegaMensagem": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "PegaMensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SETA_12_13": {
+      "main": [
+        [
+          {
+            "node": "Check JID 12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check JID 12": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check JID 13": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Wait3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DADOS": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "DADOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items3": {
+      "main": [
+        [],
+        [
+          {
+            "node": "SETA_12_13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check JID 13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait3": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Operation, do nothing1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [
+          {
+            "node": "Atualiza planilha para sim",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envia MSG Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6b9d0a20-dc12-46a6-997e-30f2997da832",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e39c44dbb1ca110843f2a38a68e89240cf7cd5e01f9f407afd6ff7afebe6cf33"
+  },
+  "id": "D2c8LMH4Fq8JT6CQ",
+  "tags": []
+}
