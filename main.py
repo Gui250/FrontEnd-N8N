@@ -1,10 +1,7 @@
 import streamlit as st
 import requests
 import time
-import json
 from requests.exceptions import ReadTimeout
-import random
-import re
 
 # Configurações principais
 WEBHOOK_MAIN_URL = "https://projeto01-n8n.peitvn.easypanel.host/webhook/b877c4b1-4eb2-475f-aead-117d6d89614c"
@@ -21,11 +18,7 @@ def init_session_state():
         "loop_count": 0,
         "execution_start_time": None,
         "last_loop_execution": 0,
-        "loop_delay": 10,
-        "message_history": {},
-        "leads_numbers": [],
-        "current_number_index": 0,
-        "number_generation_mode": "real_leads",
+        "loop_delay": 60,  # 60 segundos padrão entre execuções completas
         "webhook_url": WEBHOOK_MAIN_URL,
         "net_logs": []
     }
