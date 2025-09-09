@@ -969,39 +969,109 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
             st.success("Histórico limpo!")
             st.rerun()
 
-    st.markdown("**🔧 Diagnóstico de Conectividade:**")
+    st.markdown("**🚨 DIAGNÓSTICO COMPLETO - Execute na ordem:**")
     
-    # Verificação automática do workflow
+    if st.button("🚀 EXECUTAR DIAGNÓSTICO COMPLETO", type="primary"):
+        st.markdown("---")
+        st.markdown("### 📋 **RELATÓRIO DE DIAGNÓSTICO**")
+        
+        # 1. Testar servidor n8n
+        st.markdown("**1️⃣ Testando servidor n8n...**")
+        try:
+            base_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL).split("/webhook")[0]
+            server_response = requests.get(base_url, timeout=10)
+            if server_response.status_code == 200:
+                st.success("✅ Servidor n8n está ONLINE")
+            else:
+                st.error(f"❌ Servidor respondeu com erro: {server_response.status_code}")
+        except Exception as e:
+            st.error(f"❌ SERVIDOR N8N OFFLINE: {e}")
+            st.stop()
+        
+        # 2. Verificar workflow
+        st.markdown("**2️⃣ Verificando status do workflow...**")
+        is_active, message = check_workflow_status()
+        if is_active is True:
+            st.success(f"✅ Workflow está ATIVO: {message}")
+        elif is_active is False:
+            st.error(f"❌ WORKFLOW INATIVO: {message}")
+            st.markdown("**🔧 SOLUÇÃO: Ative o workflow no n8n!**")
+            st.markdown("1. Acesse: https://projeto01-n8n.peitvn.easypanel.host")
+            st.markdown("2. Abra seu workflow")
+            st.markdown("3. Clique no toggle 'Active' no canto superior direito")
+            st.stop()
+        else:
+            st.warning(f"⚠️ Não foi possível verificar: {message}")
+        
+        # 3. Testar webhook direto
+        st.markdown("**3️⃣ Testando webhook diretamente...**")
+        test_payload = {"timestamp": time.time(), "test": True}
+        try:
+            webhook_response = requests.post(
+                st.session_state.get("webhook_url", WEBHOOK_MAIN_URL), 
+                json=test_payload, 
+                timeout=30
+            )
+            
+            st.write(f"**Status**: {webhook_response.status_code}")
+            st.write(f"**Resposta**: {webhook_response.text[:500]}")
+            
+            if webhook_response.status_code == 200:
+                st.success("✅ WEBHOOK FUNCIONANDO!")
+            elif webhook_response.status_code == 404:
+                st.error("❌ WEBHOOK NÃO ENCONTRADO (404)")
+                st.markdown("**Possíveis causas:**")
+                st.markdown("- URL do webhook incorreta")
+                st.markdown("- Workflow foi modificado")
+                st.markdown("- Node webhook foi deletado")
+            else:
+                st.error(f"❌ WEBHOOK COM ERRO: {webhook_response.status_code}")
+                
+        except requests.exceptions.Timeout:
+            st.error("❌ WEBHOOK TIMEOUT - Não responde em 30s")
+        except Exception as e:
+            st.error(f"❌ ERRO NO WEBHOOK: {e}")
+        
+        # 4. Verificar URL
+        st.markdown("**4️⃣ Verificando URL do webhook...**")
+        current_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL)
+        st.info(f"**URL atual**: {current_url}")
+        
+        if "webhook" not in current_url:
+            st.error("❌ URL não parece ser um webhook válido")
+        else:
+            st.success("✅ Formato da URL parece correto")
+        
+        st.markdown("---")
+        st.markdown("### 🎯 **PRÓXIMOS PASSOS:**")
+        st.markdown("1. Se o workflow está inativo → **Ative no n8n**")
+        st.markdown("2. Se webhook retorna 404 → **Verifique a URL**")
+        st.markdown("3. Se tudo parece OK mas não funciona → **Verifique o node webhook no n8n**")
+    
+    st.markdown("**🔧 Testes individuais:**")
     col_diag1, col_diag2 = st.columns(2)
     with col_diag1:
-        if st.button("🔍 Verificar Status do Workflow"):
+        if st.button("🔍 Só Verificar Workflow"):
             is_active, message = check_workflow_status()
             if is_active is True:
                 st.success(f"✅ {message}")
             elif is_active is False:
                 st.error(f"❌ {message}")
-                st.markdown("""
-                **🔧 Para ativar o workflow:**
-                1. 🔗 Acesse: https://projeto01-n8n.peitvn.easypanel.host
-                2. 📝 Abra o workflow
-                3. 🔄 Clique no toggle "Active" no canto superior direito
-                """)
+                st.markdown("**🔧 Para ativar:** Acesse o n8n e ative o workflow")
             else:
                 st.warning(f"⚠️ {message}")
     
     with col_diag2:
-        if st.button("🌐 Testar Conectividade Básica"):
+        if st.button("🌐 Só Testar Servidor"):
             try:
-                with st.spinner("Testando conectividade..."):
-                    import urllib.parse
-                    base_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL).split("/webhook")[0]
-                    response = requests.get(base_url, timeout=10)
+                base_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL).split("/webhook")[0]
+                response = requests.get(base_url, timeout=10)
                 if response.status_code == 200:
                     st.success("✅ Servidor n8n acessível")
                 else:
-                    st.warning(f"⚠️ Servidor respondeu com status: {response.status_code}")
+                    st.warning(f"⚠️ Status: {response.status_code}")
             except Exception as e:
-                st.error(f"❌ Erro de conectividade: {e}")
+                st.error(f"❌ Erro: {e}")
     
     col_test1, col_test2, col_test3 = st.columns([1,1,1])
     with col_test1:
@@ -1011,31 +1081,97 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
     with col_test3:
         run_get = st.button("🧪 Testar GET")
 
-    st.markdown("**🚨 Troubleshooting - Webhook não responde:**")
-    with st.expander("🔧 Principais causas e soluções"):
-        st.markdown("""
-        **1. ❌ Workflow inativo no n8n**
-        - ✅ Solução: Acesse o n8n e ative o workflow (toggle "Active")
-        
-        **2. 🔗 URL do webhook incorreta**
-        - ✅ Solução: Copie a Production URL do node Webhook no n8n
-        
-        **3. 🚫 Servidor n8n offline**
-        - ✅ Solução: Verifique se https://projeto01-n8n.peitvn.easypanel.host está acessível
-        
-        **4. ⚙️ Configuração do node Webhook**
-        - ✅ Verifique se está configurado como POST
-        - ✅ Verifique se "Respond" está ativo
-        - ✅ Verifique se "Response Mode" está correto
-        
-        **5. 🔑 Problemas de autenticação**
-        - ✅ Verifique se o workflow não tem autenticação extra
-        
-        **6. 🌐 Problemas de rede**
-        - ✅ Teste a conectividade básica acima
-        """)
+    st.markdown("---")
+    st.markdown("### 🚨 **SOLUÇÕES RÁPIDAS - Tente na ordem:**")
     
-    st.info("💡 **Dica**: Use os botões de diagnóstico acima para identificar o problema específico.")
+    col_sol1, col_sol2 = st.columns(2)
+    
+    with col_sol1:
+        st.markdown("**🔧 SOLUÇÃO #1 (mais comum)**")
+        st.error("**Workflow inativo no n8n**")
+        st.markdown("1. 🔗 Acesse: https://projeto01-n8n.peitvn.easypanel.host")
+        st.markdown("2. 📝 Abra seu workflow")
+        st.markdown("3. 🔄 Clique no toggle **'Active'** (canto superior direito)")
+        st.markdown("4. ✅ Teste novamente")
+        
+        if st.button("🚀 Ativar Workflow Automaticamente"):
+            api_key = st.session_state.get("n8n_api_key") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3MzUyODYxfQ.2RTE1LNNfX2VIImn3Obncd0f_MnOBap7qJzeb2gwo_c"
+            workflow_id = st.session_state.get("workflow_id") or WORKFLOW_ID
+            success = activate_workflow(workflow_id, api_key, activate=True)
+            if success:
+                st.success("✅ Workflow ativado! Teste agora.")
+    
+    with col_sol2:
+        st.markdown("**🔧 SOLUÇÃO #2**")
+        st.warning("**URL do webhook incorreta**")
+        st.markdown("1. 🔗 Acesse seu n8n")
+        st.markdown("2. 📝 Abra o workflow")
+        st.markdown("3. 🎯 Clique no node **Webhook**")
+        st.markdown("4. 📋 Copie a **Production URL**")
+        st.markdown("5. 📝 Cole no campo 'Webhook URL' acima")
+        
+        st.info("**URL atual:**")
+        st.code(st.session_state.get("webhook_url", WEBHOOK_MAIN_URL))
+    
+    st.markdown("**🔧 SOLUÇÃO #3 - Se nada funcionar:**")
+    st.markdown("1. 🔄 **Recrie o node Webhook** no n8n")
+    st.markdown("2. 🎯 Configure como **POST**")
+    st.markdown("3. ✅ Ative **'Respond'**")
+    st.markdown("4. 📋 Copie a nova **Production URL**")
+    st.markdown("5. 🔄 **Ative o workflow**")
+    
+    st.markdown("---")
+    st.markdown("### ⚡ **TESTE SUPER RÁPIDO:**")
+    
+    if st.button("⚡ TESTAR TUDO AGORA - 1 CLIQUE", type="primary", help="Testa servidor, workflow e webhook em sequência"):
+        with st.spinner("Executando teste completo..."):
+            # Teste 1: Servidor
+            try:
+                base_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL).split("/webhook")[0]
+                server_test = requests.get(base_url, timeout=10)
+                if server_test.status_code != 200:
+                    st.error("❌ SERVIDOR N8N COM PROBLEMA")
+                    st.stop()
+                st.success("✅ Servidor OK")
+            except:
+                st.error("❌ SERVIDOR N8N OFFLINE")
+                st.stop()
+            
+            # Teste 2: Workflow
+            is_active, msg = check_workflow_status()
+            if is_active is False:
+                st.error("❌ WORKFLOW INATIVO - ATIVANDO...")
+                api_key = st.session_state.get("n8n_api_key") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3MzUyODYxfQ.2RTE1LNNfX2VIImn3Obncd0f_MnOBap7qJzeb2gwo_c"
+                workflow_id = st.session_state.get("workflow_id") or WORKFLOW_ID
+                if activate_workflow(workflow_id, api_key, activate=True):
+                    st.success("✅ Workflow ativado!")
+                else:
+                    st.error("❌ Não consegui ativar - ative manualmente no n8n")
+                    st.stop()
+            elif is_active is True:
+                st.success("✅ Workflow ativo")
+            
+            # Teste 3: Webhook
+            try:
+                webhook_test = requests.post(
+                    st.session_state.get("webhook_url", WEBHOOK_MAIN_URL),
+                    json={"timestamp": time.time(), "test": True},
+                    timeout=15
+                )
+                if webhook_test.status_code == 200:
+                    st.success("🎉 WEBHOOK FUNCIONANDO PERFEITAMENTE!")
+                    st.balloons()
+                elif webhook_test.status_code == 404:
+                    st.error("❌ WEBHOOK NÃO ENCONTRADO - URL incorreta")
+                else:
+                    st.error(f"❌ WEBHOOK ERRO: {webhook_test.status_code}")
+                    st.code(webhook_test.text[:300])
+            except requests.exceptions.Timeout:
+                st.error("❌ WEBHOOK MUITO LENTO (timeout)")
+            except Exception as e:
+                st.error(f"❌ ERRO NO WEBHOOK: {e}")
+    
+    st.info("💡 **Se o teste falhar**: Use as soluções acima na ordem!")
     
     # Status de execução
     if "execution_start_time" in st.session_state:
