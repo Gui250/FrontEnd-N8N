@@ -69,8 +69,7 @@ if "message_history" not in st.session_state:
 if "leads_data" not in st.session_state:
     st.session_state["leads_data"] = []
 
-if "duplicate_detection_enabled" not in st.session_state:
-    st.session_state["duplicate_detection_enabled"] = True
+# Configuração de detecção de duplicatas removida - fluxo roda até parada manual
 
 if "last_processed_number" not in st.session_state:
     st.session_state["last_processed_number"] = None
@@ -83,86 +82,32 @@ if "workflow_id" not in st.session_state:
 
 st.write(f"📌 Status atual: **{st.session_state['status']}**")
 
-# Alerta de duplicata detectada
-if "duplicate_alert" in st.session_state:
-    alert = st.session_state["duplicate_alert"]
-    time_since = time.time() - alert["timestamp"]
-    
-    if time_since < 300:  # Mostrar por 5 minutos
-        st.error("🚨 **ALERTA DE DUPLICATA DETECTADA!**")
-        st.warning(f"⚠️ Número: {alert['numero']}")
-        st.info(f"📝 {alert['message']}")
-        
-        col_alert1, col_alert2 = st.columns(2)
-        with col_alert1:
-            if st.button("✅ Entendi - Limpar Alerta"):
-                del st.session_state["duplicate_alert"]
-                st.rerun()
-        with col_alert2:
-            if st.button("🔄 Reiniciar Fluxo"):
-                del st.session_state["duplicate_alert"]
-                st.session_state["status"] = "Parado"
-                st.rerun()
-    else:
-        # Remover alerta antigo automaticamente
-        del st.session_state["duplicate_alert"]
+# Seção de alertas removida - fluxo só para com intervenção manual
 
 # --- Helper para chamadas a webhooks (POST com fallback para GET quando necessário) ---
 
 def call_webhook(url, payload=None, timeout=None, force_send=False):
     """
-    Chama webhook com validação automática de números duplicados.
+    Chama webhook sem validação automática de duplicatas.
     
     Args:
         url: URL do webhook
         payload: Dados a enviar
         timeout: Timeout da requisição
-        force_send: Se True, ignora validação de duplicatas
+        force_send: Se True, ignora validação de duplicatas (mantido para compatibilidade)
     """
     try:
-        # Validar se é um envio de mensagem e se já foi enviada (somente se proteção estiver ativada)
-        if not force_send and payload and isinstance(payload, dict) and st.session_state.get("duplicate_detection_enabled", True):
-            # Procurar por número no payload (pode estar em diferentes campos)
+        # Apenas registrar o último número processado para histórico
+        if payload and isinstance(payload, dict):
             numero = None
             for key in ['numero', 'telefone', 'phone', 'number']:
                 if key in payload:
                     numero = str(payload[key])
                     break
             
-            # Se encontrou número, validar duplicata
             if numero:
-                if is_message_already_sent(numero):
-                    error_msg = f"❌ DUPLICATA DETECTADA! Mensagem já foi enviada para {numero}. Parando workflow automaticamente!"
-                    
-                    # Log da duplicata
-                    if "net_logs" in st.session_state:
-                        st.session_state["net_logs"].append({
-                            "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                            "action": "DUPLICATE DETECTED - STOPPING WORKFLOW",
-                            "numero": numero,
-                            "error": error_msg
-                        })
-                    
-                    # PARAR WORKFLOW IMEDIATAMENTE
-                    st.error("🚨 **DUPLICATA DETECTADA! PARANDO WORKFLOW AUTOMATICAMENTE!**")
-                    st.warning(f"⚠️ Tentativa de reenvio para: {numero}")
-                    
-                    # Parar workflow de emergência
-                    if emergency_stop_workflow():
-                        st.success("✅ Workflow parado automaticamente!")
-                        # Mostrar alerta na interface
-                        st.session_state["duplicate_alert"] = {
-                            "numero": numero,
-                            "timestamp": time.time(),
-                            "message": "Workflow parado automaticamente devido a duplicata"
-                        }
-                    else:
-                        st.error("❌ Não foi possível parar o workflow automaticamente. PARE MANUALMENTE!")
-                    
-                    raise ValueError(error_msg)
-                else:
-                    # Atualizar último número processado
-                    st.session_state["last_processed_number"] = numero
+                # Atualizar último número processado
+                st.session_state["last_processed_number"] = numero
         
         # Log de tentativa de POST
         if "net_logs" in st.session_state:
@@ -686,20 +631,9 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
             else:
                 st.info(f"ℹ️ {message}")
     
-    # Proteção contra duplicatas
-    st.markdown("**🛡️ Proteção Anti-Duplicata:**")
-    col_protection1, col_protection2 = st.columns(2)
-    with col_protection1:
-        st.session_state["duplicate_detection_enabled"] = st.checkbox(
-            "🔍 Detecção automática de duplicatas",
-            value=st.session_state.get("duplicate_detection_enabled", True),
-            help="Quando ativado, para o workflow automaticamente se detectar tentativa de envio para número já processado"
-        )
-    with col_protection2:
-        if st.session_state.get("duplicate_detection_enabled"):
-            st.success("🛡️ Proteção ATIVA - Workflow será parado automaticamente em caso de duplicata")
-        else:
-            st.warning("⚠️ Proteção DESATIVADA - Mensagens duplicadas podem ser enviadas")
+    # Histórico de mensagens (apenas para controle visual)
+    st.markdown("**📊 Histórico de Mensagens:**")
+    st.info("💡 O fluxo agora roda continuamente até ser parado manualmente pelo usuário.")
     
     # Controles manuais de ativação/desativação
     if st.session_state.get("workflow_id"):
@@ -825,42 +759,20 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
 
     if run_post and test_payload is not None:
         try:
-            # Verificar se há número no payload para validação prévia
+            # Identificar número no payload apenas para logs
             numero = None
             for key in ['numero', 'telefone', 'phone', 'number']:
                 if key in test_payload:
                     numero = str(test_payload[key])
                     break
             
-            force_send = False
-            
-            # Se encontrou número, fazer validação prévia com opção de forçar envio
-            if numero and is_message_already_sent(numero):
-                st.error(f"❌ **Mensagem já foi enviada para o número {numero}!**")
-                st.warning("⚠️ Este número já está na lista de processados. Deseja enviar mesmo assim?")
-                
-                col_confirm1, col_confirm2 = st.columns(2)
-                with col_confirm1:
-                    if st.button("🔄 Forçar Envio", key="force_resend"):
-                        force_send = True
-                        st.info("🔄 Forçando reenvio...")
-                    else:
-                        st.info("❌ Envio cancelado - número já processado")
-                        st.stop()
-                with col_confirm2:
-                    if st.button("❌ Cancelar", key="cancel_send"):
-                        st.info("Envio cancelado pelo usuário.")
-                        st.stop()
-            elif numero:
-                st.success(f"✅ Número {numero} liberado para envio")
-            
-            # Usar call_webhook com validação automática
+            # Enviar sem validação de duplicatas
             with st.spinner("Enviando POST de teste..."):
                 r = call_webhook(
                     st.session_state["webhook_url"], 
                     test_payload, 
                     timeout=int(timeout_val),
-                    force_send=force_send
+                    force_send=True  # Sempre forçar envio em testes
                 )
             
             if r.status_code == 200:
@@ -871,9 +783,6 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
             st.write(f"Status: {r.status_code}")
             st.code((r.text or "" )[:1000])
             
-        except ValueError as ve:
-            # Erro de validação (duplicata)
-            st.error(str(ve))
         except Exception as e:
             st.error(f"Erro no POST de teste: {e}")
 
