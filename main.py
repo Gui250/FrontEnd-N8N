@@ -35,22 +35,38 @@ def call_webhook(url, payload=None, timeout=30):
         raise e
 
 def test_webhook_connection():
-    """Testa a conectividade do webhook."""
+    """Testa a conectividade do webhook com diagnóstico avançado."""
     try:
         st.info("🔍 Testando conectividade do Webhook1...")
         
+        # Teste 1: Verificar URL
+        st.write("**1. Verificando URL do webhook...**")
+        st.code(WEBHOOK_LEADS)
+        
+        # Teste 2: Payload mínimo
         test_payload = {
             "test": True,
             "timestamp": time.time()
         }
         
+        st.write("**2. Enviando payload de teste...**")
+        st.json(test_payload)
+        
         response = call_webhook(WEBHOOK_LEADS, test_payload, timeout=15)
+        
+        # Teste 3: Análise da resposta
+        st.write("**3. Análise da resposta:**")
+        st.write(f"**Status Code:** {response.status_code}")
+        st.write(f"**Headers:** {dict(response.headers)}")
+        st.write(f"**Response Text:** {response.text[:500]}...")
         
         st.session_state["operation_logs"].append({
             "timestamp": time.strftime("%H:%M:%S"),
             "action": "CONNECTION_TEST",
             "status": response.status_code,
-            "details": f"Teste de conectividade - Status: {response.status_code}"
+            "details": f"Teste de conectividade - Status: {response.status_code}",
+            "response_text": response.text[:200],
+            "headers": dict(response.headers)
         })
         
         if response.status_code == 200:
@@ -64,12 +80,94 @@ def test_webhook_connection():
             return False
         else:
             st.error(f"❌ Webhook retornou erro: {response.status_code}")
-            st.code(response.text[:300] if response.text else "Sem resposta")
+            st.code(response.text[:500] if response.text else "Sem resposta")
             return False
             
     except Exception as e:
         st.error(f"❌ Erro ao testar webhook: {e}")
+        st.exception(e)
         return False
+
+def diagnose_workflow_issue():
+    """Diagnóstico completo do workflow."""
+    st.markdown("### 🔧 DIAGNÓSTICO COMPLETO")
+    
+    # Teste 1: Verificar se o n8n está online
+    st.write("**1. Testando se o n8n está online...**")
+    try:
+        base_response = requests.get(N8N_BASE_URL, timeout=10)
+        if base_response.status_code == 200:
+            st.success("✅ n8n está online e respondendo")
+        else:
+            st.error(f"❌ n8n retornou status {base_response.status_code}")
+    except Exception as e:
+        st.error(f"❌ n8n não está acessível: {e}")
+    
+    # Teste 2: Verificar estrutura da URL do webhook
+    st.write("**2. Verificando estrutura da URL...**")
+    webhook_parts = WEBHOOK_LEADS.split('/')
+    st.write(f"- **Base URL**: {'/'.join(webhook_parts[:-2])}")
+    st.write(f"- **Endpoint**: /{'/'.join(webhook_parts[-2:])}")
+    st.write(f"- **Webhook ID**: {webhook_parts[-1]}")
+    
+    # Teste 3: Tentar diferentes payloads
+    st.write("**3. Testando diferentes estruturas de payload...**")
+    
+    payloads_to_test = [
+        {"test": True},
+        {},
+        {"trigger": "start"},
+        {"data": "test"},
+        None
+    ]
+    
+    for i, payload in enumerate(payloads_to_test, 1):
+        try:
+            st.write(f"**Teste {i}**: {payload}")
+            response = requests.post(WEBHOOK_LEADS, json=payload, timeout=10)
+            st.write(f"Status: {response.status_code} | Response: {response.text[:100]}")
+        except Exception as e:
+            st.write(f"Erro: {e}")
+    
+    # Teste 4: Verificar método HTTP
+    st.write("**4. Testando diferentes métodos HTTP...**")
+    for method in ['POST', 'GET']:
+        try:
+            if method == 'POST':
+                response = requests.post(WEBHOOK_LEADS, json={"test": True}, timeout=10)
+            else:
+                response = requests.get(WEBHOOK_LEADS, timeout=10)
+            st.write(f"**{method}**: Status {response.status_code}")
+        except Exception as e:
+            st.write(f"**{method}**: Erro - {e}")
+
+def test_alternative_webhook_urls():
+    """Testa URLs alternativas do webhook."""
+    st.markdown("### 🔄 TESTANDO URLs ALTERNATIVAS")
+    
+    # URLs alternativas baseadas no JSON
+    alternative_urls = [
+        f"{N8N_BASE_URL}/webhook-test/ce723d0d-a280-414f-aec3-85c940f7dc6f",
+        f"{N8N_BASE_URL}/webhook/test/ce723d0d-a280-414f-aec3-85c940f7dc6f",
+        f"{N8N_BASE_URL}/api/webhook/ce723d0d-a280-414f-aec3-85c940f7dc6f",
+        f"{N8N_BASE_URL}/production/webhook/ce723d0d-a280-414f-aec3-85c940f7dc6f"
+    ]
+    
+    for i, url in enumerate(alternative_urls, 1):
+        st.write(f"**Teste {i}**: {url}")
+        try:
+            response = requests.post(url, json={"test": True}, timeout=5)
+            if response.status_code == 200:
+                st.success(f"✅ URL alternativa funcionou! Status: {response.status_code}")
+                st.write(f"**Nova URL funcional**: {url}")
+                return url
+            else:
+                st.write(f"Status: {response.status_code}")
+        except Exception as e:
+            st.write(f"Erro: {e}")
+    
+    st.warning("❌ Nenhuma URL alternativa funcionou")
+    return None
 
 def show_activation_instructions():
     """Mostra instruções detalhadas para ativar o workflow."""
@@ -250,6 +348,72 @@ with col2:
     if st.button("🔍 TESTAR WEBHOOK1", type="secondary", use_container_width=True):
         test_webhook_connection()
 
+# ========== DIAGNÓSTICO AVANÇADO ==========
+st.markdown("## 🔧 Diagnóstico Avançado")
+
+col_diag1, col_diag2, col_diag3 = st.columns(3)
+
+with col_diag1:
+    if st.button("🔧 DIAGNÓSTICO COMPLETO", use_container_width=True):
+        diagnose_workflow_issue()
+
+with col_diag2:
+    if st.button("🔄 TESTAR URLs ALTERNATIVAS", use_container_width=True):
+        alternative_url = test_alternative_webhook_urls()
+        if alternative_url:
+            st.info(f"💡 Considere usar: {alternative_url}")
+
+with col_diag3:
+    if st.button("📋 VERIFICAR JSON WORKFLOW", use_container_width=True):
+        st.markdown("### 📋 Informações do Workflow JSON")
+        st.write("**Webhook ID encontrado no JSON**: ce723d0d-a280-414f-aec3-85c940f7dc6f")
+        st.write("**Nome do node**: Webhook1")
+        st.write("**Método HTTP**: POST")
+        st.write("**Response Mode**: responseNode")
+        st.write("**Conexão**: Webhook1 → Code → Get row(s) in sheet")
+
+# ========== SOLUÇÕES RÁPIDAS ==========
+with st.expander("🚨 SOLUÇÕES RÁPIDAS - SE O FLUXO NÃO FUNCIONA", expanded=True):
+    st.error("🚨 **PROBLEMA**: O fluxo não inicia no n8n")
+    
+    col_sol1, col_sol2 = st.columns(2)
+    
+    with col_sol1:
+        st.markdown("""
+        **🔧 CHECKLIST RÁPIDO:**
+        
+        1. ✅ **Workflow ativo?**
+           - Acesse o n8n
+           - Toggle "Active" deve estar verde
+        
+        2. ✅ **URL correta?**
+           - Use o diagnóstico acima
+           - Teste URLs alternativas
+        
+        3. ✅ **n8n online?**
+           - Acesse: https://projeto01-n8n.peitvn.easypanel.host
+           - Deve carregar a interface
+        """)
+    
+    with col_sol2:
+        st.markdown("""
+        **🎯 SOLUÇÕES MAIS COMUNS:**
+        
+        1. **Reativar o workflow**:
+           - Desative e ative novamente
+           - Aguarde 30 segundos
+        
+        2. **Usar URL de teste**:
+           - No n8n, use a URL de teste
+           - Depois mude para produção
+        
+        3. **Verificar Google Sheets**:
+           - Deve ter dados para processar
+           - Coluna "mensagem" deve estar vazia
+        """)
+    
+    st.warning("💡 **DICA**: Use o 'DIAGNÓSTICO COMPLETO' acima para identificar o problema exato")
+
 # ========== INSTRUÇÕES MANUAIS ==========
 st.markdown("## ⚙️ Instruções para Ativar Manualmente")
 
@@ -362,4 +526,4 @@ with st.expander("🔧 Informações Técnicas", expanded=False):
     """)
 
 st.markdown("---")
-st.caption("🚀 Iniciar Fluxo - Versão simplificada que apenas dispara o workflow")
+st.caption("🚀 Webhook1 Controller - Versão simplificada sem dependência de API")
