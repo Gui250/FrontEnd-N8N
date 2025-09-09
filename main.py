@@ -105,48 +105,46 @@ def load_leads_numbers():
         return example_numbers
 
 def get_next_dynamic_number():
-    """Retorna o próximo número dinâmico que ainda NÃO recebeu mensagem."""
+    """Retorna o próximo número dinâmico - SEMPRE gera um número válido."""
     mode = st.session_state.get("number_generation_mode", "real_leads")
-    max_attempts = 100
     
-    for _ in range(max_attempts):
-        if mode == "real_leads":
-            if not st.session_state.get("leads_numbers"):
-                load_leads_numbers()
-            
-            numbers = st.session_state["leads_numbers"]
-            if numbers:
+    # MODO 1: Números reais dos leads
+    if mode == "real_leads":
+        if not st.session_state.get("leads_numbers"):
+            load_leads_numbers()
+        
+        numbers = st.session_state.get("leads_numbers", [])
+        if numbers:
+            # Encontrar próximo número não enviado
+            for i in range(len(numbers)):
                 current_index = st.session_state.get("current_number_index", 0)
                 if current_index >= len(numbers):
-                    current_index = 0
-                    st.session_state["current_number_index"] = 0
+                    # Se chegou ao fim, usar modo sequencial como fallback
+                    break
                 
                 number = numbers[current_index]
                 st.session_state["current_number_index"] = current_index + 1
                 
                 if not is_message_already_sent(number):
                     return number
-        
-        elif mode == "random":
-            area_codes = ["11", "21", "31", "41", "51"]
-            area = random.choice(area_codes)
-            prefix = random.choice(["9", "8", "7"])
-            number = f"55{area}{prefix}{random.randint(10000000, 99999999)}"
-            
-            if not is_message_already_sent(number):
-                return number
-        
-        elif mode == "sequential":
-            base_number = 5511999000000
-            current_index = st.session_state.get("current_number_index", 0)
-            number = str(base_number + current_index)
-            st.session_state["current_number_index"] = current_index + 1
-            
-            if not is_message_already_sent(number):
-                return number
     
-    # Fallback único baseado em timestamp
-    return f"5511999{int(time.time()) % 1000000:06d}"
+    # MODO 2: Números aleatórios (sempre únicos)
+    elif mode == "random":
+        # Gerar número baseado em timestamp para garantir unicidade
+        timestamp_part = int(time.time() * 1000) % 100000000  # 8 dígitos
+        area_codes = ["11", "21", "31", "41", "51"]
+        area = random.choice(area_codes)
+        return f"55{area}9{timestamp_part}"
+    
+    # MODO 3: Números sequenciais
+    elif mode == "sequential":
+        current_index = st.session_state.get("current_number_index", 0)
+        st.session_state["current_number_index"] = current_index + 1
+        return f"5511999{current_index:06d}"
+    
+    # FALLBACK: Sempre retorna um número único baseado em timestamp
+    unique_part = int(time.time() * 1000) % 1000000
+    return f"5511999{unique_part:06d}"
 
 def call_webhook(url, payload=None, timeout=30):
     """Chama o webhook com o payload."""
@@ -176,7 +174,7 @@ def execute_single_loop_cycle():
         if st.session_state.get("loop_stop_flag", False):
             return False
         
-        # Gerar número dinâmico
+        # Gerar número dinâmico - SEMPRE funciona
         dynamic_number = get_next_dynamic_number()
         
         # Preparar payload
@@ -187,19 +185,49 @@ def execute_single_loop_cycle():
             "continuous_mode": True
         }
         
+        # Log detalhado do que está sendo enviado
+        st.session_state["net_logs"].append({
+            "when": time.strftime("%H:%M:%S"),
+            "action": "SENDING",
+            "numero": dynamic_number,
+            "cycle": payload["loop_cycle"]
+        })
+        
         # Chamar webhook
         response = call_webhook(st.session_state["webhook_url"], payload)
         
+        # Sempre incrementar contador (mesmo se der erro)
+        st.session_state["loop_count"] += 1
+        
         if response.status_code == 200:
-            # Incrementar contador e marcar como enviado
-            st.session_state["loop_count"] += 1
+            # Marcar como enviado apenas se sucesso
             mark_message_as_sent(dynamic_number, "Mensagem enviada via loop")
-            return True
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "SUCCESS",
+                "numero": dynamic_number,
+                "status": response.status_code
+            })
         else:
-            return True  # Continuar mesmo com erro
+            # Log de erro mas continua
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "ERROR",
+                "numero": dynamic_number,
+                "status": response.status_code,
+                "error": response.text[:100]
+            })
+        
+        return True  # SEMPRE continuar
             
-    except Exception:
-        return True  # Continuar mesmo com exceção
+    except Exception as e:
+        # Log de exceção mas continua
+        st.session_state["net_logs"].append({
+            "when": time.strftime("%H:%M:%S"),
+            "action": "EXCEPTION",
+            "error": str(e)
+        })
+        return True  # SEMPRE continuar
 
 # --- Interface Principal ---
 st.write(f"📌 **Status atual:** {st.session_state['status']}")
@@ -297,29 +325,64 @@ with st.expander("⚙️ Configurações", expanded=False):
 
     # Teste manual
     st.markdown("**🧪 Teste Manual:**")
-    if st.button("Testar Webhook Agora"):
-        test_number = get_next_dynamic_number()
-        test_payload = {"timestamp": time.time(), "numero": test_number, "test": True}
-        
-        try:
-            with st.spinner("Testando..."):
-                response = call_webhook(st.session_state["webhook_url"], test_payload)
+    col_test1, col_test2 = st.columns(2)
+    
+    with col_test1:
+        if st.button("🔥 Teste Rápido", type="primary"):
+            test_number = get_next_dynamic_number()
+            test_payload = {"timestamp": time.time(), "numero": test_number, "test": True}
             
-            if response.status_code == 200:
-                st.success(f"✅ Teste OK! Número: {test_number}")
+            try:
+                with st.spinner("Testando conexão..."):
+                    response = call_webhook(st.session_state["webhook_url"], test_payload)
+                
+                if response.status_code == 200:
+                    st.success(f"✅ **WEBHOOK FUNCIONANDO!** Número: {test_number}")
+                    st.balloons()
+                else:
+                    st.error(f"❌ Erro {response.status_code}: {response.text[:100]}")
+                    st.warning("🔧 Verifique se o workflow está ativo no n8n!")
+            except Exception as e:
+                st.error(f"❌ Falha na conexão: {e}")
+                st.warning("🔧 Verifique se o n8n está online!")
+    
+    with col_test2:
+        if st.button("🔍 Ver Próximo Número"):
+            next_num = get_next_dynamic_number()
+            st.code(f"Próximo: {next_num}")
+            
+            # Verificar se já foi enviado
+            if is_message_already_sent(next_num):
+                st.warning("⚠️ Este número já recebeu mensagem")
             else:
-                st.error(f"❌ Erro {response.status_code}: {response.text[:100]}")
-        except Exception as e:
-            st.error(f"❌ Falha: {e}")
+                st.success("✅ Número disponível para envio")
 
-# Logs recentes
+# Logs recentes e debug
 if st.session_state.get("net_logs"):
-    with st.expander("📋 Logs Recentes"):
-        for log in st.session_state["net_logs"][-5:]:
-            if log.get("action") == "POST":
-                st.write(f"🔗 {log['when']} - Status {log['status']} - Número: {log['payload'].get('numero', 'N/A')}")
+    with st.expander("📋 Debug - Últimas Operações", expanded=True):
+        st.caption("🔍 Acompanhe em tempo real o que está sendo enviado para o n8n:")
+        
+        # Mostrar últimos 8 logs
+        recent_logs = st.session_state["net_logs"][-8:]
+        for log in recent_logs:
+            if log.get("action") == "SENDING":
+                st.info(f"📤 {log['when']} - Enviando ciclo {log.get('cycle', '?')} - Número: **{log.get('numero', 'N/A')}**")
+            elif log.get("action") == "SUCCESS":
+                st.success(f"✅ {log['when']} - Sucesso! Número {log.get('numero', 'N/A')} - Status {log.get('status', '?')}")
             elif log.get("action") == "ERROR":
-                st.write(f"❌ {log['when']} - Erro: {log['error']}")
+                st.error(f"❌ {log['when']} - Erro {log.get('status', '?')} - Número {log.get('numero', 'N/A')}")
+                if log.get("error"):
+                    st.caption(f"Detalhes: {log['error']}")
+            elif log.get("action") == "EXCEPTION":
+                st.error(f"🚨 {log['when']} - Exceção: {log.get('error', 'Erro desconhecido')}")
+            elif log.get("action") == "POST":
+                st.write(f"🔗 {log['when']} - HTTP {log.get('status', '?')} - Número: {log.get('payload', {}).get('numero', 'N/A')}")
+        
+        # Estatísticas rápidas
+        if len(recent_logs) > 0:
+            success_count = len([l for l in recent_logs if l.get("action") == "SUCCESS"])
+            error_count = len([l for l in recent_logs if l.get("action") == "ERROR"])
+            st.caption(f"📊 Últimas operações: {success_count} sucessos, {error_count} erros")
 
 # Lógica do loop - execução automática
 if st.session_state.get("loop_active", False):
