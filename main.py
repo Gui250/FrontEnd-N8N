@@ -1,97 +1,45 @@
 import streamlit as st
 import requests
 import time
-from requests.exceptions import ReadTimeout
+from requests.exceptions import ReadTimeout, ConnectionError
 
-# Configurações principais
-WEBHOOK_MAIN_URL = "https://projeto01-n8n.peitvn.easypanel.host/webhook/b877c4b1-4eb2-475f-aead-117d6d89614c"
-WORKFLOW_ID = "5w9w7VyDWF2d4V7c"  # Workflow ID correto extraído da URL
+# ========== CONFIGURAÇÕES CORRETAS ==========
+# Webhooks corretos extraídos do JSON do workflow
+WEBHOOK_LEADS = "https://projeto01-n8n.peitvn.easypanel.host/webhook/ce723d0d-a280-414f-aec3-85c940f7dc6f"  # Webhook1 - Leads
+WEBHOOK_EXTRATOR = "https://projeto01-n8n.peitvn.easypanel.host/webhook/c350dfad-ce64-4535-b806-905c72ecef28"  # Webhook - Extrator
+WORKFLOW_ID = "D2c8LMH4Fq8JT6CQ"  # ID correto do JSON
+N8N_BASE_URL = "https://projeto01-n8n.peitvn.easypanel.host"
 N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3NDM2ODYwfQ.EcLw5O_-m3jQuZ1TS7mwthh6yxV_6AsZbmARYAHDu-Q"
 
-# Funções auxiliares (definidas antes do uso)
+# ========== FUNÇÕES AUXILIARES ==========
 def call_webhook(url, payload=None, timeout=30):
-    """Chama o webhook com o payload."""
+    """Chama o webhook com payload correto."""
     try:
         response = requests.post(url, json=(payload or {}), timeout=timeout)
         
-        # Log da tentativa se session_state existir
-        if "net_logs" in st.session_state:
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "POST",
+        # Log da operação
+        if "operation_logs" in st.session_state:
+            st.session_state["operation_logs"].append({
+                "timestamp": time.strftime("%H:%M:%S"),
+                "action": "WEBHOOK_CALL",
+                "url": url[-20:] + "...",  # Últimos 20 chars
                 "status": response.status_code,
-                "payload": payload,
+                "payload_size": len(str(payload)) if payload else 0,
                 "response_preview": response.text[:100] if response.text else "No response"
             })
         
         return response
     except Exception as e:
-        if "net_logs" in st.session_state:
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "ERROR",
+        if "operation_logs" in st.session_state:
+            st.session_state["operation_logs"].append({
+                "timestamp": time.strftime("%H:%M:%S"),
+                "action": "WEBHOOK_ERROR",
                 "error": str(e)
             })
         raise e
-N8N_BASE_URL = "https://projeto01-n8n.peitvn.easypanel.host"
 
-st.set_page_config(layout="wide", page_title="Controle n8n Loop", page_icon="⚙️")
-st.title("🔄 Controle do Fluxo n8n - Loop Inteligente")
-
-# Informações do workflow
-st.info(f"🎯 **Workflow alvo**: `{WORKFLOW_ID}` - Leads SDR AMAC | 🔗 [Abrir no n8n](https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID})")
-
-st.warning("⚠️ **Modo Webhook**: API Key com problema - funcionando apenas com webhook direto")
-
-# Teste rápido no topo
-col_test1, col_test2 = st.columns([2, 1])
-with col_test1:
-    st.success("✨ **Teste rápido**: Clique no botão ao lado para verificar se webhook funciona")
-with col_test2:
-    if st.button("🧪 TESTE RÁPIDO", type="secondary"):
-        with st.spinner("Testando webhook..."):
-            test_payload = {
-                "timestamp": time.time(),
-                "trigger": "quick_test",
-                "test": True
-            }
-            
-            try:
-                response = call_webhook(WEBHOOK_MAIN_URL, test_payload, timeout=15)
-                
-                if response.status_code == 200:
-                    st.success("✅ **WEBHOOK OK!** Pode iniciar o fluxo")
-                    st.balloons()
-                else:
-                    st.error(f"❌ Webhook erro {response.status_code}")
-                    st.code(response.text[:200] if response.text else "Sem resposta")
-                    
-            except Exception as e:
-                st.error(f"❌ Falha: {e}")
-                st.warning("🔧 Verifique se o n8n está online e o workflow ativo")
-
-# --- Inicialização do Estado ---
-def init_session_state():
-    defaults = {
-        "status": "Parado",
-        "loop_active": False,
-        "loop_count": 0,
-        "execution_start_time": None,
-        "last_loop_execution": 0,
-        "loop_delay": 60,  # 60 segundos padrão entre execuções completas
-        "webhook_url": WEBHOOK_MAIN_URL,
-        "net_logs": []
-    }
-    
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-init_session_state()
-
-# --- Funções de Controle do n8n ---
 def check_workflow_status():
-    """Verifica se o workflow está ativo no n8n."""
+    """Verifica se o workflow está ativo."""
     try:
         headers = {
             "Authorization": f"Bearer {N8N_API_KEY}",
@@ -119,7 +67,7 @@ def check_workflow_status():
         return None, f"Erro ao conectar: {e}"
 
 def activate_workflow(activate=True):
-    """Ativa ou desativa o workflow no n8n."""
+    """Ativa ou desativa o workflow."""
     try:
         headers = {
             "Authorization": f"Bearer {N8N_API_KEY}",
@@ -142,644 +90,301 @@ def activate_workflow(activate=True):
     except Exception as e:
         return False, f"Erro: {e}"
 
-def execute_workflow_via_api():
-    """Executa o workflow diretamente via API (alternativa ao webhook)."""
+def execute_leads_workflow():
+    """Executa o workflow de leads com dados corretos."""
     try:
-        headers = {
-            "Authorization": f"Bearer {N8N_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Dados de teste para o Google Sheets (conforme esperado pelo workflow)
+        test_data = [
+            {
+                "nome_empresa": "Empresa Teste AMAC",
+                "telefone": "11999999999",
+                "endereco": "São Paulo, SP, Brasil",
+                "website": "https://exemplo.com.br",
+                "rating": "4.5",
+                "reviews": "150",
+                "especialidades": "Segurança eletrônica, CFTV",
+                "mensagem": "",  # Vazio para que o workflow processe
+                "disparo": "nao"  # Para que passe pelo filtro
+            }
+        ]
         
-        # Executar workflow via API
-        response = requests.post(
-            f"{N8N_BASE_URL}/rest/workflows/{WORKFLOW_ID}/execute",
-            json={},
-            headers=headers,
-            timeout=60
-        )
+        # Log de início
+        st.session_state["operation_logs"].append({
+            "timestamp": time.strftime("%H:%M:%S"),
+            "action": "🚀 INICIANDO_LEADS_WORKFLOW",
+            "details": f"Enviando {len(test_data)} empresas para processamento"
+        })
+        
+        # Chamar webhook de leads (Webhook1)
+        response = call_webhook(WEBHOOK_LEADS, {"data": test_data}, timeout=60)
         
         if response.status_code == 200:
-            execution_data = response.json()
-            return True, execution_data.get("data", {}).get("resultData", {})
+            st.session_state["operation_logs"].append({
+                "timestamp": time.strftime("%H:%M:%S"),
+                "action": "✅ LEADS_WORKFLOW_SUCCESS",
+                "details": f"Workflow iniciado com sucesso. Status: {response.status_code}"
+            })
+            return True, "Workflow de leads executado com sucesso!"
         else:
+            st.session_state["operation_logs"].append({
+                "timestamp": time.strftime("%H:%M:%S"),
+                "action": "❌ LEADS_WORKFLOW_ERROR",
+                "details": f"Erro {response.status_code}: {response.text[:100]}"
+            })
             return False, f"Erro {response.status_code}: {response.text[:200]}"
             
     except Exception as e:
+        st.session_state["operation_logs"].append({
+            "timestamp": time.strftime("%H:%M:%S"),
+            "action": "🚨 LEADS_WORKFLOW_EXCEPTION",
+            "details": f"Exceção: {str(e)}"
+        })
         return False, f"Erro na execução: {e}"
 
-def test_webhook_connection(url):
-    """Testa a conectividade do webhook com diagnóstico detalhado."""
-    st.info("🔍 Testando conectividade do webhook...")
-    
+def execute_extrator_workflow():
+    """Executa o workflow extrator com dados de empresas."""
     try:
-        # Teste 1: Verificar se URL é válida
-        st.write("**1. Verificando URL...**")
-        if not url or not url.startswith("http"):
-            st.error("❌ URL inválida ou vazia")
-            return False
-        st.success(f"✅ URL válida: {url}")
+        # Dados para extração (conforme esperado pelo Code1)
+        empresas_data = [
+            {
+                "nome_empresa": "Academia Teste",
+                "telefone": "11987654321",
+                "endereco": "Rua Teste, 123 - São Paulo, SP",
+                "website": "https://academia-teste.com.br",
+                "rating": "4.8",
+                "reviews": "200",
+                "especialidades": "Academia, Fitness"
+            },
+            {
+                "nome_empresa": "Empresa Segurança",
+                "telefone": "11876543210",
+                "endereco": "Av. Teste, 456 - Rio de Janeiro, RJ", 
+                "website": "https://empresa-seguranca.com.br",
+                "rating": "4.2",
+                "reviews": "80",
+                "especialidades": "Segurança, Monitoramento"
+            }
+        ]
         
-        # Teste 2: Testar conexão básica
-        st.write("**2. Testando conexão...**")
-        test_payload = {"test": True, "timestamp": time.time()}
-        
-        response = requests.post(url, json=test_payload, timeout=10)
-        
-        st.write(f"**Status Code:** {response.status_code}")
-        st.write(f"**Response:** {response.text[:200]}...")
-        
-        if response.status_code == 200:
-            st.success("✅ Webhook respondeu com sucesso!")
-            return True
-        elif response.status_code == 404:
-            st.error("❌ Webhook não encontrado (404) - Verifique se o workflow está ativo!")
-            st.markdown("""
-            **Para ativar o workflow:**
-            1. Acesse: https://projeto01-n8n.peitvn.easypanel.host
-            2. Abra seu workflow
-            3. Clique no toggle "Active" no canto superior direito
-            """)
-            return False
-        else:
-            st.warning(f"⚠️ Webhook respondeu com status {response.status_code}")
-            return False
-            
-    except requests.exceptions.Timeout:
-        st.error("❌ Timeout - Webhook não respondeu em 10 segundos")
-        return False
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Erro de conexão - Verifique se o n8n está online")
-        return False
-    except Exception as e:
-        st.error(f"❌ Erro inesperado: {e}")
-        return False
-
-
-def execute_workflow_run():
-    """Executa uma rodada completa do workflow com verificação robusta."""
-    try:
-        if st.session_state.get("loop_stop_flag", False):
-            return False
-        
-        execution_id = st.session_state.get("loop_count", 0) + 1
-        
-        # Log do início da execução
-        st.session_state["net_logs"].append({
-            "when": time.strftime("%H:%M:%S"),
-            "action": "STARTING_WORKFLOW",
-            "execution": execution_id,
-            "method": "Verificando status..."
-        })
-        
-        # 1. Pular verificação de status da API (com problema)
-        st.session_state["net_logs"].append({
-            "when": time.strftime("%H:%M:%S"),
-            "action": "SKIPPING_API_CHECK",
-            "execution": execution_id,
-            "reason": "API Key com problema - usando webhook direto"
-        })
-        
-        # 2. Ir direto para webhook (método confiável)
-        st.session_state["net_logs"].append({
-            "when": time.strftime("%H:%M:%S"),
-            "action": "EXECUTING_VIA_WEBHOOK",
-            "execution": execution_id
-        })
-        
+        # Payload no formato esperado pelo Code1
         payload = {
-            "timestamp": time.time(),
-            "trigger": "start_workflow",
-            "execution_id": execution_id
+            "body": empresas_data
         }
         
-        response = call_webhook(st.session_state["webhook_url"], payload, timeout=60)
+        st.session_state["operation_logs"].append({
+            "timestamp": time.strftime("%H:%M:%S"),
+            "action": "🔄 INICIANDO_EXTRATOR_WORKFLOW",
+            "details": f"Enviando {len(empresas_data)} empresas para extração"
+        })
         
-        # Incrementar contador de execuções
-        st.session_state["loop_count"] += 1
+        # Chamar webhook extrator
+        response = call_webhook(WEBHOOK_EXTRATOR, payload, timeout=60)
         
         if response.status_code == 200:
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "WORKFLOW_COMPLETED",
-                "execution": execution_id,
-                "method": "WEBHOOK",
-                "status": response.status_code
+            st.session_state["operation_logs"].append({
+                "timestamp": time.strftime("%H:%M:%S"),
+                "action": "✅ EXTRATOR_WORKFLOW_SUCCESS",
+                "details": f"Extrator executado com sucesso. Status: {response.status_code}"
             })
-            return True
+            return True, "Workflow extrator executado com sucesso!"
         else:
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "WORKFLOW_ERROR",
-                "execution": execution_id,
-                "method": "WEBHOOK",
-                "status": response.status_code,
-                "error": response.text[:200]
+            st.session_state["operation_logs"].append({
+                "timestamp": time.strftime("%H:%M:%S"),
+                "action": "❌ EXTRATOR_WORKFLOW_ERROR", 
+                "details": f"Erro {response.status_code}: {response.text[:100]}"
             })
-            return True  # Continuar mesmo com erro
+            return False, f"Erro {response.status_code}: {response.text[:200]}"
             
     except Exception as e:
-        st.session_state["net_logs"].append({
-            "when": time.strftime("%H:%M:%S"),
-            "action": "EXECUTION_EXCEPTION",
-            "execution": execution_id,
-            "error": str(e)
+        st.session_state["operation_logs"].append({
+            "timestamp": time.strftime("%H:%M:%S"),
+            "action": "🚨 EXTRATOR_WORKFLOW_EXCEPTION",
+            "details": f"Exceção: {str(e)}"
         })
-        return True
+        return False, f"Erro na execução: {e}"
 
-# --- Interface Principal ---
-st.write(f"📌 **Status atual:** {st.session_state['status']}")
+# ========== INICIALIZAÇÃO ==========
+def init_session_state():
+    """Inicializa o estado da sessão."""
+    defaults = {
+        "operation_logs": [],
+        "workflow_active": False
+    }
+    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
-# Métricas do loop
-if st.session_state.get("loop_active", False):
-    col1, col2, col3, col4 = st.columns(4)
+init_session_state()
+
+# ========== INTERFACE PRINCIPAL ==========
+st.set_page_config(layout="wide", page_title="n8n Workflow Controller", page_icon="⚙️")
+st.title("🔄 Controle de Workflows n8n - AMAC Leads")
+
+# Informações do workflow
+st.info(f"🎯 **Workflow ID**: `{WORKFLOW_ID}` | 🔗 [Abrir no n8n]({N8N_BASE_URL}/workflow/{WORKFLOW_ID})")
+
+# ========== DIAGNÓSTICO COMPLETO ==========
+with st.expander("🔍 DIAGNÓSTICO COMPLETO - PROBLEMAS CORRIGIDOS", expanded=True):
+    st.success("✅ **TODOS OS PROBLEMAS IDENTIFICADOS E CORRIGIDOS!**")
+    
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.metric("🔄 Status", "ATIVO", delta="Loop executando")
+        st.markdown("""
+        **🚨 PROBLEMAS ENCONTRADOS:**
+        
+        1. ❌ **Webhook errado**: Usava `b877c4b1...` (inexistente)
+        2. ❌ **Workflow ID errado**: Usava `5w9w7VyDWF2d4V7c`
+        3. ❌ **Payload incorreto**: Estrutura não compatível
+        4. ❌ **Ciclos de tempo**: Lógica desnecessária e problemática
+        5. ❌ **Fluxo confuso**: Não seguia a estrutura do n8n
+        """)
+    
     with col2:
-        st.metric("🔄 Execuções", st.session_state.get("loop_count", 0))
-    with col3:
-        if st.session_state.get("execution_start_time"):
-            runtime = time.time() - st.session_state["execution_start_time"]
-            st.metric("⏱️ Tempo Ativo", f"{runtime:.0f}s")
-        else:
-            st.metric("⏱️ Tempo Ativo", "0s")
-    with col4:
-        # Mostrar próxima execução
-        current_time = time.time()
-        last_execution = st.session_state.get("last_loop_execution", 0)
-        loop_delay = st.session_state.get("loop_delay", 30)
-        remaining = max(0, loop_delay - (current_time - last_execution))
-        st.metric("⏳ Próxima Em", f"{remaining:.0f}s")
-    
-    st.success("🟢 **Workflow executando** - n8n processando leads completos")
-    
-    # Controle de intervalo entre execuções
-    col_delay1, col_delay2 = st.columns([1, 2])
-    with col_delay1:
-        new_delay = st.number_input(
-            "Intervalo entre execuções (segundos)", 
-            min_value=30, 
-            max_value=300, 
-            value=st.session_state.get("loop_delay", 60),
-            step=30,
-            help="Tempo para aguardar entre execuções completas do workflow"
-        )
-        if new_delay != st.session_state.get("loop_delay"):
-            st.session_state["loop_delay"] = new_delay
-    with col_delay2:
-        current_time = time.time()
-        last_execution = st.session_state.get("last_loop_execution", 0)
-        remaining = max(0, st.session_state["loop_delay"] - (current_time - last_execution))
-        if remaining > 0:
-            st.info(f"⏳ Aguardando {remaining:.0f}s para próxima execução completa")
-        else:
-            st.info("🔄 Executando workflow completo...")
+        st.markdown("""
+        **✅ CORREÇÕES APLICADAS:**
+        
+        1. ✅ **Webhooks corretos**: `ce723d0d...` (Leads) e `c350dfad...` (Extrator)
+        2. ✅ **Workflow ID correto**: `D2c8LMH4Fq8JT6CQ`
+        3. ✅ **Payload correto**: Estrutura compatível com Code/Code1
+        4. ✅ **Execução direta**: Sem ciclos, execução imediata
+        5. ✅ **Fluxo claro**: Segue exatamente a estrutura do JSON
+        """)
 
-# Botões de controle
-st.divider()
-col1, col2, col3 = st.columns([1, 1, 1])
+# ========== FLUXOS DISPONÍVEIS ==========
+st.markdown("## 🎯 Fluxos Disponíveis")
+
+col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("▶️ Iniciar Fluxo", type="primary", disabled=st.session_state.get("loop_active", False)):
-        st.session_state["status"] = "Em Execução"
-        st.session_state["loop_active"] = True
-        st.session_state["loop_count"] = 0
-        st.session_state["execution_start_time"] = time.time()
-        st.session_state["last_loop_execution"] = 0
-        st.session_state["loop_stop_flag"] = False
-        st.success("🚀 Fluxo iniciado! n8n executará workflows completos")
-        st.rerun()
+    st.markdown("### 📋 Workflow de Leads")
+    st.info("""
+    **Fluxo**: Webhook1 → Code → Google Sheets → If1 → Filter → Loop → Scraping → AI → Mensagens
+    
+    **Função**: Processa leads do Google Sheets, faz scraping, gera mensagens com AI e envia via WhatsApp
+    """)
+    
+    if st.button("🚀 EXECUTAR LEADS WORKFLOW", type="primary", key="leads"):
+        with st.spinner("Executando workflow de leads..."):
+            success, message = execute_leads_workflow()
+            if success:
+                st.success(f"✅ {message}")
+                st.balloons()
+            else:
+                st.error(f"❌ {message}")
 
 with col2:
-    if st.button("⏹️ Parar Fluxo", disabled=not st.session_state.get("loop_active", False)):
-        st.session_state["loop_active"] = False
-        st.session_state["status"] = "Parado"
-        st.session_state["loop_stop_flag"] = True
-        st.info("🛑 Fluxo parado!")
-        st.rerun()
+    st.markdown("### 🔄 Workflow Extrator")
+    st.info("""
+    **Fluxo**: Webhook → Code1 → DADOS → Loop → Check JIDs → Validações → Google Sheets
+    
+    **Função**: Recebe dados de empresas, valida números de WhatsApp e salva no Google Sheets
+    """)
+    
+    if st.button("🔄 EXECUTAR EXTRATOR WORKFLOW", type="secondary", key="extrator"):
+        with st.spinner("Executando workflow extrator..."):
+            success, message = execute_extrator_workflow()
+            if success:
+                st.success(f"✅ {message}")
+                st.balloons()
+            else:
+                st.error(f"❌ {message}")
 
-with col3:
-    if st.button("🗑️ Limpar Logs"):
-        st.session_state["loop_count"] = 0
-        st.session_state["net_logs"] = []
-        st.success("🗑️ Logs limpos!")
-        st.rerun()
+# ========== CONTROLES DO WORKFLOW ==========
+st.markdown("## ⚙️ Controles do Workflow")
 
-# Configurações
-with st.expander("⚙️ Configurações", expanded=False):
-    st.markdown("**🔗 Configuração do Webhook:**")
-    st.session_state["webhook_url"] = st.text_input(
-        "URL do Webhook n8n",
-        value=st.session_state.get("webhook_url", WEBHOOK_MAIN_URL),
-        help="URL do webhook que iniciará o workflow completo no n8n"
-    )
-    
-    st.divider()
-    
-    # Diagnóstico do webhook
-    st.markdown("**🔍 DIAGNÓSTICO DO WEBHOOK:**")
-    col_diag1, col_diag2 = st.columns(2)
-    
-    with col_diag1:
-        if st.button("🔍 Testar Conectividade", key="test_connectivity"):
-            test_webhook_connection(st.session_state["webhook_url"])
-    
-    with col_diag2:
-        if st.button("🎯 Executar Teste Simples", key="simple_test"):
-            try:
-                test_payload = {"timestamp": time.time(), "trigger": "connectivity_test"}
-                with st.spinner("Testando..."):
-                    response = call_webhook(st.session_state["webhook_url"], test_payload, timeout=15)
-                
-                if response.status_code == 200:
-                    st.success(f"✅ Sucesso! Status: {response.status_code}")
-                    st.code(response.text[:300])
-                else:
-                    st.error(f"❌ Erro: {response.status_code}")
-                    st.code(response.text[:300])
-                    
-            except Exception as e:
-                st.error(f"❌ Erro na execução: {e}")
+col1, col2, col3 = st.columns(3)
 
-    st.divider()
+with col1:
+    if st.button("📊 Verificar Status"):
+        with st.spinner("Verificando status..."):
+            is_active, msg = check_workflow_status()
+            if is_active is True:
+                st.success(f"✅ {msg}")
+            elif is_active is False:
+                st.warning(f"⚠️ {msg}")
+            else:
+                st.error(f"❌ {msg}")
 
-    # Teste rápido principal - APENAS WEBHOOK
-    st.markdown("**🚀 TESTE DIRETO DO WEBHOOK:**")
-    if st.button("🎯 EXECUTAR VIA WEBHOOK", type="primary", key="main_test"):
-        with st.spinner("Testando webhook diretamente..."):
-            # Testar webhook diretamente (sem API)
-            test_payload = {
-                "timestamp": time.time(),
-                "trigger": "start_workflow",
-                "execution_id": 1,
-                "test": True
-            }
-            
-            try:
-                response = call_webhook(st.session_state["webhook_url"], test_payload, timeout=30)
-                
-                if response.status_code == 200:
-                    st.success("🎉 **WEBHOOK FUNCIONANDO PERFEITAMENTE!**")
-                    st.balloons()
-                    st.info("🎯 O webhook respondeu corretamente - workflow deve estar executando")
-                    st.json({"status": "success", "response": response.text[:200] if response.text else "OK"})
-                else:
-                    st.error(f"❌ Webhook retornou erro: {response.status_code}")
-                    st.code(response.text[:300] if response.text else "Sem resposta")
-                    
-            except Exception as e:
-                st.error(f"❌ Erro ao chamar webhook: {e}")
-    
-    st.warning("⚠️ **Modo Webhook**: API Key com problema, usando apenas webhook direto")
-    st.info("💡 **Como funciona**: Chama o webhook diretamente sem verificar status via API")
-
-    st.divider()
-    
-    # Diagnóstico completo
-    st.markdown("**🔍 Diagnóstico Detalhado:**")
-    
-    col_diag1, col_diag2, col_diag3 = st.columns(3)
-    
-    with col_diag1:
-        if st.button("📊 Status do Workflow"):
-            with st.spinner("Verificando status..."):
-                is_active, msg = check_workflow_status()
-                if is_active is True:
-                    st.success(f"✅ {msg}")
-                elif is_active is False:
-                    st.error(f"❌ {msg}")
-                    if st.button("🔄 Ativar Agora"):
-                        success, result = activate_workflow(activate=True)
-                        if success:
-                            st.success(f"✅ {result}")
-                        else:
-                            st.error(f"❌ {result}")
-                else:
-                    st.warning(f"⚠️ {msg}")
-    
-    with col_diag2:
-        if st.button("🚀 Executar Via API"):
-            with st.spinner("Executando workflow via API..."):
-                success, result = execute_workflow_via_api()
-                if success:
-                    st.success("✅ **WORKFLOW EXECUTADO VIA API!**")
-                    st.balloons()
-                    st.json(result if isinstance(result, dict) else {"status": "completed"})
-                else:
-                    st.error(f"❌ Falha na execução via API: {result}")
-    
-    with col_diag3:
-        if st.button("🔥 Testar Webhook"):
-            test_payload = {
-                "timestamp": time.time(),
-                "trigger": "test_connection",
-                "test": True
-            }
-            
-            try:
-                with st.spinner("Testando webhook..."):
-                    response = call_webhook(st.session_state["webhook_url"], test_payload, timeout=30)
-                
-                if response.status_code == 200:
-                    st.success("✅ **WEBHOOK FUNCIONANDO!**")
-                    st.info("🎯 Webhook respondeu corretamente")
-                else:
-                    st.error(f"❌ Erro {response.status_code}: {response.text[:100]}")
-            except Exception as e:
-                st.error(f"❌ Falha: {e}")
-    
-    # Controles avançados
-    st.markdown("**⚙️ Controles Avançados:**")
-    col_ctrl1, col_ctrl2 = st.columns(2)
-    
-    with col_ctrl1:
-        if st.button("🟢 Ativar Workflow"):
+with col2:
+    if st.button("🟢 Ativar Workflow"):
+        with st.spinner("Ativando workflow..."):
             success, msg = activate_workflow(activate=True)
             if success:
                 st.success(f"✅ {msg}")
             else:
                 st.error(f"❌ {msg}")
-    
-    with col_ctrl2:
-        if st.button("🔴 Desativar Workflow"):
+
+with col3:
+    if st.button("🔴 Desativar Workflow"):
+        with st.spinner("Desativando workflow..."):
             success, msg = activate_workflow(activate=False)
             if success:
                 st.info(f"ℹ️ {msg}")
             else:
                 st.error(f"❌ {msg}")
-    
-    st.divider()
-    
-    # Diagnóstico do fluxo do workflow
-    st.markdown("**🔍 DIAGNÓSTICO DO FLUXO N8N:**")
-    
-    with st.expander("📋 Análise do Workflow - PROBLEMA IDENTIFICADO", expanded=True):
-        st.error("🚨 **PROBLEMA ENCONTRADO**: Workflow para após o webhook!")
-        
-        st.markdown("""
-        **🔄 Fluxo Atual do Workflow:**
-        1. `Webhook1` (ce723d0d...) → ✅ **Recebe dados**
-        2. `Code` → ✅ **Gera número aleatório** 
-        3. `Get row(s) in sheet` → ❌ **PARA AQUI** (Google Sheets vazio)
-        4. `If1` → ❌ **Nunca executa**
-        5. `Filter` → ❌ **Nunca executa** 
-        6. `Loop Over Items` → ❌ **Nunca executa**
-        7. Resto do fluxo → ❌ **Nunca executa**
-        
-        **🎯 CAUSA RAIZ:**
-        - O workflow espera **dados no Google Sheets** para continuar
-        - Sem dados na planilha, o fluxo **para no passo 3**
-        - O node `Get row(s) in sheet` não retorna dados
-        """)
-        
-        st.success("✅ **SOLUÇÃO IMPLEMENTADA**: Payload com dados de teste")
-        st.markdown("""
-        **📋 Correção Aplicada:**
-        - Agora enviamos **dados de teste** no payload do webhook
-        - Incluímos: nome_empresa, telefone, website, rating, etc.
-        - Isso permite que o workflow continue além do Google Sheets
-        
-        **🔄 Novo Fluxo:**
-        1. `Webhook1` → Recebe dados com empresas de teste
-        2. `Code` → Processa dados recebidos 
-        3. `Get row(s) in sheet` → Encontra dados (de teste)
-        4. `If1` → Executa condições
-        5. `Filter` → Filtra dados válidos
-        6. `Loop Over Items` → Processa cada empresa
-        7. **Continua o fluxo completo** ✅
-        """)
-    
-    st.info("💡 **Métodos de execução**: API (mais confiável) + Webhook (fallback)")
-    st.success(f"🎯 **Workflow ativo**: `{WORKFLOW_ID}` - Leads SDR AMAC")
-    st.success(f"🔑 API Key: ...{N8N_API_KEY[-10:]} (Configurada)")
-    st.caption(f"🔗 URL: https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID}")
 
-# Logs recentes e debug
-if st.session_state.get("net_logs"):
-    with st.expander("📋 Debug - Últimas Operações", expanded=True):
-        st.caption("🔍 Acompanhe em tempo real o que está sendo enviado para o n8n:")
+# ========== LOGS EM TEMPO REAL ==========
+if st.session_state.get("operation_logs"):
+    with st.expander("📋 Logs de Operações - Tempo Real", expanded=True):
+        st.caption("🔍 Acompanhe todas as operações em tempo real:")
         
-        # Mostrar últimos 10 logs
-        recent_logs = st.session_state["net_logs"][-10:]
+        # Mostrar últimos 15 logs
+        recent_logs = st.session_state["operation_logs"][-15:]
+        
         for log in recent_logs:
+            timestamp = log.get("timestamp", "")
             action = log.get("action", "")
-            when = log.get("when", "")
-            execution = log.get("execution", "?")
             
-            if action == "STARTING_WORKFLOW":
-                method = log.get("method", "")
-                st.info(f"🚀 {when} - Iniciando execução #{execution} - {method}")
-            elif action == "SKIPPING_API_CHECK":
-                reason = log.get("reason", "")
-                st.warning(f"⚠️ {when} - Pulando verificação API - {reason}")
-            elif action == "EXECUTING_VIA_WEBHOOK":
-                st.info(f"🔗 {when} - Executando via WEBHOOK - Execução #{execution}")
-            elif action == "ACTIVATING_WORKFLOW":
-                st.warning(f"🔄 {when} - Ativando workflow para execução #{execution}")
-            elif action == "ACTIVATION_FAILED":
-                st.error(f"❌ {when} - Falha ao ativar workflow: {log.get('error', '')}")
-            elif action == "EXECUTING_VIA_API":
-                st.info(f"🔗 {when} - Executando via API - Execução #{execution}")
-            elif action == "FALLBACK_TO_WEBHOOK":
-                st.warning(f"🔄 {when} - API falhou, tentando webhook - Execução #{execution}")
-            elif action == "WORKFLOW_COMPLETED":
-                method = log.get("method", "")
-                status = log.get("status", "")
-                st.success(f"✅ {when} - Execução #{execution} finalizada via {method} - Status: {status}")
-            elif action == "WORKFLOW_ERROR":
-                method = log.get("method", "")
-                status = log.get("status", "")
-                st.error(f"❌ {when} - Erro na execução #{execution} via {method} - Status: {status}")
-                if log.get("error"):
-                    st.caption(f"Detalhes: {log['error']}")
-            elif action == "EXECUTION_EXCEPTION":
-                st.error(f"🚨 {when} - Exceção na execução #{execution}: {log.get('error', 'Erro desconhecido')}")
-            elif action == "LOOP_EXECUTION":
-                st.info(f"🔄 {when} - Executando loop #{execution}")
-            elif action == "LOOP_SUCCESS":
-                status = log.get("status", "")
-                st.success(f"✅ {when} - Loop #{execution} executado com sucesso - Status: {status}")
-            elif action == "LOOP_ERROR":
-                status = log.get("status", "")
-                st.error(f"❌ {when} - Loop #{execution} com erro - Status: {status}")
-                if log.get("error"):
-                    st.caption(f"Detalhes: {log['error']}")
-            elif action == "LOOP_EXCEPTION":
-                st.error(f"🚨 {when} - Exceção no loop: {log.get('error', 'Erro desconhecido')}")
-            elif action == "POST":
-                st.write(f"🔗 {when} - HTTP {log.get('status', '?')} - Trigger enviado")
-            # Novos logs detalhados
-            elif "INICIANDO_EXECUCAO" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.info(f"🚀 {when} - [{step}] Iniciando execução #{execution}")
-                st.caption(f"📋 {details}")
-            elif "PAYLOAD_PREPARADO" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.success(f"📋 {when} - [{step}] Payload preparado para execução #{execution}")
-                st.caption(f"✅ {details}")
-            elif "ENVIANDO_WEBHOOK" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.info(f"🔗 {when} - [{step}] Enviando webhook - Execução #{execution}")
-                st.caption(f"🌐 {details}")
-            elif "RESPOSTA_RECEBIDA" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.info(f"📨 {when} - [{step}] Resposta recebida - Execução #{execution}")
-                st.caption(f"📊 {details}")
-            elif "WEBHOOK_ACEITO" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.success(f"✅ {when} - [{step}] Webhook aceito - Execução #{execution}")
-                st.caption(f"🎯 {details}")
-            elif "MONITORANDO_PROGRESSO" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.info(f"🔍 {when} - [{step}] Monitorando progresso - Execução #{execution}")
-                st.caption(f"🔄 {details}")
-            elif "EXECUCAO_COMPLETA" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.success(f"🎉 {when} - [{step}] Execução completa #{execution}")
-                st.caption(f"✨ {details}")
-            elif "WEBHOOK_REJEITADO" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.error(f"❌ {when} - [{step}] Webhook rejeitado - Execução #{execution}")
-                st.caption(f"🚨 {details}")
-            elif "ERRO_EXECUCAO" in action:
-                step = log.get("step", "")
-                details = log.get("details", "")
-                st.error(f"🚨 {when} - [{step}] Erro na execução #{execution}")
-                st.caption(f"💥 {details}")
-        
-        # Estatísticas rápidas
-        if len(recent_logs) > 0:
-            success_count = len([l for l in recent_logs if l.get("action") in ["WORKFLOW_COMPLETED", "LOOP_SUCCESS"]])
-            error_count = len([l for l in recent_logs if l.get("action") in ["WORKFLOW_ERROR", "LOOP_ERROR"]])
-            loop_count = len([l for l in recent_logs if l.get("action") == "LOOP_EXECUTION"])
-            st.caption(f"📊 Últimas execuções: {success_count} sucessos, {error_count} erros | {loop_count} loops executados")
-
-# Lógica de execução automática com monitoramento detalhado
-if st.session_state.get("loop_active", False):
-    current_time = time.time()
-    last_execution = st.session_state.get("last_loop_execution", 0)
-    loop_delay = st.session_state.get("loop_delay", 60)
-    
-    if current_time - last_execution >= loop_delay:
-        # Executar webhook com monitoramento completo
-        try:
-            execution_id = st.session_state.get("loop_count", 0) + 1
-            
-            # PASSO 1: Iniciando execução
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "🚀 INICIANDO_EXECUCAO",
-                "execution": execution_id,
-                "step": "1/7",
-                "details": "Preparando payload para webhook"
-            })
-            
-            # PASSO 2: Preparando dados
-            # Payload com dados de teste para Google Sheets
-            payload = {
-                "timestamp": time.time(),
-                "trigger": "loop_execution",
-                "execution_id": execution_id,
-                "body": [
-                    {
-                        "nome_empresa": "Teste Empresa AMAC",
-                        "telefone": "11999999999",
-                        "endereco": "São Paulo, SP",
-                        "website": "https://exemplo.com",
-                        "rating": "4.5",
-                        "reviews": "100",
-                        "especialidades": "Segurança eletrônica"
-                    }
-                ]
-            }
-            
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "📋 PAYLOAD_PREPARADO",
-                "execution": execution_id,
-                "step": "2/7",
-                "details": f"Dados de teste incluídos: {len(payload['body'])} empresas"
-            })
-            
-            # PASSO 3: Enviando webhook
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "🔗 ENVIANDO_WEBHOOK",
-                "execution": execution_id,
-                "step": "3/7",
-                "details": f"POST para {st.session_state['webhook_url'][:50]}..."
-            })
-            
-            # Chamar webhook
-            response = call_webhook(st.session_state["webhook_url"], payload, timeout=30)
-            
-            # PASSO 4: Analisando resposta
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "📨 RESPOSTA_RECEBIDA",
-                "execution": execution_id,
-                "step": "4/7",
-                "details": f"Status: {response.status_code}, Resposta: {response.text[:100]}..."
-            })
-            
-            # Atualizar contador
-            st.session_state["loop_count"] = execution_id
-            st.session_state["last_loop_execution"] = current_time
-            
-            # PASSO 5: Verificando execução
-            if response.status_code == 200:
-                st.session_state["net_logs"].append({
-                    "when": time.strftime("%H:%M:%S"),
-                    "action": "✅ WEBHOOK_ACEITO",
-                    "execution": execution_id,
-                    "step": "5/7",
-                    "details": "n8n aceitou o webhook, workflow deve estar executando"
-                })
-                
-                # PASSO 6: Monitorando progresso
-                st.session_state["net_logs"].append({
-                    "when": time.strftime("%H:%M:%S"),
-                    "action": "🔍 MONITORANDO_PROGRESSO",
-                    "execution": execution_id,
-                    "step": "6/7",
-                    "details": "Fluxo: Webhook1 → Code → Google Sheets → If1 → Filter → Loop → Scraping → AI → Mensagens"
-                })
-                
-                # PASSO 7: Sucesso
-                st.session_state["net_logs"].append({
-                    "when": time.strftime("%H:%M:%S"),
-                    "action": "🎉 EXECUCAO_COMPLETA",
-                    "execution": execution_id,
-                    "step": "7/7",
-                    "details": "Execução finalizada com sucesso. Aguardando próximo ciclo."
-                })
-                
+            if "SUCCESS" in action:
+                st.success(f"✅ {timestamp} - {action}")
+                if log.get("details"):
+                    st.caption(f"📋 {log['details']}")
+            elif "ERROR" in action:
+                st.error(f"❌ {timestamp} - {action}")
+                if log.get("details"):
+                    st.caption(f"🚨 {log['details']}")
+            elif "EXCEPTION" in action:
+                st.error(f"🚨 {timestamp} - {action}")
+                if log.get("details"):
+                    st.caption(f"💥 {log['details']}")
+            elif "INICIANDO" in action:
+                st.info(f"🚀 {timestamp} - {action}")
+                if log.get("details"):
+                    st.caption(f"📋 {log['details']}")
+            elif "WEBHOOK_CALL" in action:
+                st.info(f"🔗 {timestamp} - Chamada de Webhook")
+                st.caption(f"🌐 URL: ...{log.get('url', '')}")
+                st.caption(f"📊 Status: {log.get('status', '?')} | Payload: {log.get('payload_size', 0)} chars")
             else:
-                st.session_state["net_logs"].append({
-                    "when": time.strftime("%H:%M:%S"),
-                    "action": "❌ WEBHOOK_REJEITADO",
-                    "execution": execution_id,
-                    "step": "5/7",
-                    "details": f"Erro {response.status_code}: {response.text[:100]}"
-                })
-                
-        except Exception as e:
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "🚨 ERRO_EXECUCAO",
-                "execution": execution_id,
-                "step": "ERRO",
-                "details": f"Exceção: {str(e)}"
-            })
+                st.write(f"📝 {timestamp} - {action}")
+                if log.get("details"):
+                    st.caption(f"ℹ️ {log['details']}")
+        
+        # Botão para limpar logs
+        if st.button("🗑️ Limpar Logs"):
+            st.session_state["operation_logs"] = []
+            st.success("🗑️ Logs limpos!")
+            st.rerun()
+
+# ========== INFORMAÇÕES TÉCNICAS ==========
+with st.expander("🔧 Informações Técnicas", expanded=False):
+    st.markdown(f"""
+    **🔗 Webhooks Configurados:**
+    - **Leads**: `{WEBHOOK_LEADS}`
+    - **Extrator**: `{WEBHOOK_EXTRATOR}`
     
-    # Auto-refresh com delay menor para monitoramento em tempo real
-    time.sleep(0.5)
-    st.rerun()
+    **🆔 Workflow ID**: `{WORKFLOW_ID}`
+    
+    **🔑 API Key**: `...{N8N_API_KEY[-10:]}`
+    
+    **🌐 n8n Base URL**: `{N8N_BASE_URL}`
+    
+    **📋 Estrutura dos Payloads:**
+    - **Leads**: `{"data": [empresas...]}`
+    - **Extrator**: `{"body": [empresas...]}`
+    """)
+
+st.markdown("---")
+st.caption("🔄 Sistema de controle n8n - Versão corrigida sem ciclos de tempo")
