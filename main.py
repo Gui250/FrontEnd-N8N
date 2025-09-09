@@ -5,10 +5,49 @@ from requests.exceptions import ReadTimeout
 
 # Configurações principais
 WEBHOOK_MAIN_URL = "https://projeto01-n8n.peitvn.easypanel.host/webhook/b877c4b1-4eb2-475f-aead-117d6d89614c"
-WORKFLOW_ID = "D2c8LMH4Fq8JT6CQ"
+WORKFLOW_ID = "5w9w7VyDWF2d4V7c"  # Workflow ID correto extraído da URL
+N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3NDM2NTA0fQ.P5grlimwkQoQsPuHBsU3aDckq82-SDWtaOWGtaoUPHg"
+N8N_BASE_URL = "https://projeto01-n8n.peitvn.easypanel.host"
 
 st.set_page_config(layout="wide", page_title="Controle n8n Loop", page_icon="⚙️")
 st.title("🔄 Controle do Fluxo n8n - Loop Inteligente")
+
+# Informações do workflow
+col_info1, col_info2 = st.columns([3, 1])
+with col_info1:
+    st.info(f"🎯 **Workflow alvo**: `{WORKFLOW_ID}` - Leads SDR AMAC")
+with col_info2:
+    if st.button("🚀 TESTE RÁPIDO", type="primary"):
+        with st.spinner("Testando workflow correto..."):
+            # Verificar status
+            is_active, status_msg = check_workflow_status()
+            
+            if is_active is True:
+                st.success("✅ Workflow está ATIVO!")
+                
+                # Tentar executar
+                success, result = execute_workflow_via_api()
+                if success:
+                    st.success("🎉 **WORKFLOW EXECUTADO COM SUCESSO!**")
+                    st.balloons()
+                    st.info("🎯 O workflow está processando os leads automaticamente")
+                else:
+                    st.error(f"❌ Falha na execução: {result}")
+            elif is_active is False:
+                st.warning("⚠️ Workflow está INATIVO. Ativando...")
+                activate_success, activate_msg = activate_workflow(activate=True)
+                if activate_success:
+                    st.success("✅ Workflow ativado! Tentando executar...")
+                    success, result = execute_workflow_via_api()
+                    if success:
+                        st.success("🎉 **WORKFLOW ATIVADO E EXECUTADO!**")
+                        st.balloons()
+                    else:
+                        st.error(f"❌ Falha após ativação: {result}")
+                else:
+                    st.error(f"❌ Falha ao ativar: {activate_msg}")
+            else:
+                st.error(f"❌ Erro ao verificar status: {status_msg}")
 
 # --- Inicialização do Estado ---
 def init_session_state():
@@ -29,10 +68,83 @@ def init_session_state():
 
 init_session_state()
 
-# --- Funções Utilitárias ---
-# Funções de controle de números removidas - n8n gerencia os leads
+# --- Funções de Controle do n8n ---
+def check_workflow_status():
+    """Verifica se o workflow está ativo no n8n."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {N8N_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{N8N_BASE_URL}/rest/workflows/{WORKFLOW_ID}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            workflow_data = response.json()
+            is_active = workflow_data.get("active", False)
+            return is_active, f"Workflow está {'ativo' if is_active else 'inativo'}"
+        elif response.status_code == 401:
+            return None, "Erro de autenticação - API Key inválida"
+        elif response.status_code == 404:
+            return None, f"Workflow ID '{WORKFLOW_ID}' não encontrado"
+        else:
+            return None, f"Erro {response.status_code}: {response.text[:100]}"
+            
+    except Exception as e:
+        return None, f"Erro ao conectar: {e}"
 
-# Funções de números removidas - n8n fará a leitura dos leads
+def activate_workflow(activate=True):
+    """Ativa ou desativa o workflow no n8n."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {N8N_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.patch(
+            f"{N8N_BASE_URL}/rest/workflows/{WORKFLOW_ID}",
+            json={"active": activate},
+            headers=headers,
+            timeout=15
+        )
+        
+        if response.status_code == 200:
+            action = "ativado" if activate else "desativado"
+            return True, f"Workflow {action} com sucesso!"
+        else:
+            return False, f"Erro {response.status_code}: {response.text[:100]}"
+            
+    except Exception as e:
+        return False, f"Erro: {e}"
+
+def execute_workflow_via_api():
+    """Executa o workflow diretamente via API (alternativa ao webhook)."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {N8N_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        # Executar workflow via API
+        response = requests.post(
+            f"{N8N_BASE_URL}/rest/workflows/{WORKFLOW_ID}/execute",
+            json={},
+            headers=headers,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            execution_data = response.json()
+            return True, execution_data.get("data", {}).get("resultData", {})
+        else:
+            return False, f"Erro {response.status_code}: {response.text[:200]}"
+            
+    except Exception as e:
+        return False, f"Erro na execução: {e}"
 
 def call_webhook(url, payload=None, timeout=30):
     """Chama o webhook com o payload."""
@@ -57,57 +169,108 @@ def call_webhook(url, payload=None, timeout=30):
         raise e
 
 def execute_workflow_run():
-    """Executa uma rodada completa do workflow e aguarda finalização."""
+    """Executa uma rodada completa do workflow com verificação robusta."""
     try:
         if st.session_state.get("loop_stop_flag", False):
             return False
         
-        # Payload simples - apenas trigger para o workflow
-        payload = {
-            "timestamp": time.time(),
-            "trigger": "start_workflow",
-            "execution_id": st.session_state.get("loop_count", 0) + 1
-        }
+        execution_id = st.session_state.get("loop_count", 0) + 1
         
         # Log do início da execução
         st.session_state["net_logs"].append({
             "when": time.strftime("%H:%M:%S"),
             "action": "STARTING_WORKFLOW",
-            "execution": payload["execution_id"]
+            "execution": execution_id,
+            "method": "Verificando status..."
         })
         
-        # Chamar webhook para iniciar workflow
+        # 1. Primeiro verificar se workflow está ativo
+        is_active, status_msg = check_workflow_status()
+        
+        if is_active is False:
+            # Tentar ativar automaticamente
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "ACTIVATING_WORKFLOW",
+                "execution": execution_id
+            })
+            
+            success, msg = activate_workflow(activate=True)
+            if not success:
+                st.session_state["net_logs"].append({
+                    "when": time.strftime("%H:%M:%S"),
+                    "action": "ACTIVATION_FAILED",
+                    "execution": execution_id,
+                    "error": msg
+                })
+                return True  # Continuar tentando
+        
+        # 2. Tentar execução via API primeiro (mais confiável)
+        st.session_state["net_logs"].append({
+            "when": time.strftime("%H:%M:%S"),
+            "action": "EXECUTING_VIA_API",
+            "execution": execution_id
+        })
+        
+        api_success, api_result = execute_workflow_via_api()
+        
+        if api_success:
+            # Incrementar contador de execuções
+            st.session_state["loop_count"] += 1
+            
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "WORKFLOW_COMPLETED",
+                "execution": execution_id,
+                "method": "API",
+                "status": "SUCCESS"
+            })
+            return True
+        
+        # 3. Se API falhar, tentar webhook como fallback
+        st.session_state["net_logs"].append({
+            "when": time.strftime("%H:%M:%S"),
+            "action": "FALLBACK_TO_WEBHOOK",
+            "execution": execution_id,
+            "api_error": str(api_result)[:100]
+        })
+        
+        payload = {
+            "timestamp": time.time(),
+            "trigger": "start_workflow",
+            "execution_id": execution_id
+        }
+        
         response = call_webhook(st.session_state["webhook_url"], payload, timeout=60)
         
         # Incrementar contador de execuções
         st.session_state["loop_count"] += 1
         
         if response.status_code == 200:
-            # Workflow iniciado com sucesso
             st.session_state["net_logs"].append({
                 "when": time.strftime("%H:%M:%S"),
                 "action": "WORKFLOW_COMPLETED",
-                "execution": payload["execution_id"],
-                "status": response.status_code,
-                "response_time": "OK"
+                "execution": execution_id,
+                "method": "WEBHOOK",
+                "status": response.status_code
             })
             return True
         else:
-            # Log de erro mas continua
             st.session_state["net_logs"].append({
                 "when": time.strftime("%H:%M:%S"),
                 "action": "WORKFLOW_ERROR",
-                "execution": payload["execution_id"],
+                "execution": execution_id,
+                "method": "WEBHOOK",
                 "status": response.status_code,
                 "error": response.text[:200]
             })
             return True  # Continuar mesmo com erro
             
     except Exception as e:
-        # Log de exceção mas continua
         st.session_state["net_logs"].append({
             "when": time.strftime("%H:%M:%S"),
             "action": "EXECUTION_EXCEPTION",
+            "execution": execution_id,
             "error": str(e)
         })
         return True
@@ -199,58 +362,129 @@ with st.expander("⚙️ Configurações", expanded=False):
         help="URL do webhook que iniciará o workflow completo no n8n"
     )
 
-    # Teste manual
-    st.markdown("**🧪 Teste de Conexão:**")
-    if st.button("🔥 Testar Webhook", type="primary"):
-        test_payload = {
-            "timestamp": time.time(),
-            "trigger": "test_connection",
-            "test": True
-        }
-        
-        try:
-            with st.spinner("Testando conexão com n8n..."):
-                response = call_webhook(st.session_state["webhook_url"], test_payload, timeout=30)
-            
-            if response.status_code == 200:
-                st.success("✅ **WEBHOOK FUNCIONANDO!** n8n respondeu corretamente")
-                st.balloons()
-                st.info("🎯 O workflow no n8n deve processar os leads automaticamente")
-            else:
-                st.error(f"❌ Erro {response.status_code}: {response.text[:100]}")
-                st.warning("🔧 Verifique se o workflow está ativo no n8n!")
-        except Exception as e:
-            st.error(f"❌ Falha na conexão: {e}")
-            st.warning("🔧 Verifique se o n8n está online!")
+    # Diagnóstico completo
+    st.markdown("**🔍 Diagnóstico e Controle:**")
     
-    st.info("💡 **Como funciona**: O Python apenas dispara o webhook. O n8n faz toda a leitura e processamento dos leads.")
+    col_diag1, col_diag2, col_diag3 = st.columns(3)
+    
+    with col_diag1:
+        if st.button("📊 Status do Workflow"):
+            with st.spinner("Verificando status..."):
+                is_active, msg = check_workflow_status()
+                if is_active is True:
+                    st.success(f"✅ {msg}")
+                elif is_active is False:
+                    st.error(f"❌ {msg}")
+                    if st.button("🔄 Ativar Agora"):
+                        success, result = activate_workflow(activate=True)
+                        if success:
+                            st.success(f"✅ {result}")
+                        else:
+                            st.error(f"❌ {result}")
+                else:
+                    st.warning(f"⚠️ {msg}")
+    
+    with col_diag2:
+        if st.button("🚀 Executar Via API"):
+            with st.spinner("Executando workflow via API..."):
+                success, result = execute_workflow_via_api()
+                if success:
+                    st.success("✅ **WORKFLOW EXECUTADO VIA API!**")
+                    st.balloons()
+                    st.json(result if isinstance(result, dict) else {"status": "completed"})
+                else:
+                    st.error(f"❌ Falha na execução via API: {result}")
+    
+    with col_diag3:
+        if st.button("🔥 Testar Webhook"):
+            test_payload = {
+                "timestamp": time.time(),
+                "trigger": "test_connection",
+                "test": True
+            }
+            
+            try:
+                with st.spinner("Testando webhook..."):
+                    response = call_webhook(st.session_state["webhook_url"], test_payload, timeout=30)
+                
+                if response.status_code == 200:
+                    st.success("✅ **WEBHOOK FUNCIONANDO!**")
+                    st.info("🎯 Webhook respondeu corretamente")
+                else:
+                    st.error(f"❌ Erro {response.status_code}: {response.text[:100]}")
+            except Exception as e:
+                st.error(f"❌ Falha: {e}")
+    
+    # Controles avançados
+    st.markdown("**⚙️ Controles Avançados:**")
+    col_ctrl1, col_ctrl2 = st.columns(2)
+    
+    with col_ctrl1:
+        if st.button("🟢 Ativar Workflow"):
+            success, msg = activate_workflow(activate=True)
+            if success:
+                st.success(f"✅ {msg}")
+            else:
+                st.error(f"❌ {msg}")
+    
+    with col_ctrl2:
+        if st.button("🔴 Desativar Workflow"):
+            success, msg = activate_workflow(activate=False)
+            if success:
+                st.info(f"ℹ️ {msg}")
+            else:
+                st.error(f"❌ {msg}")
+    
+    st.info("💡 **Métodos de execução**: API (mais confiável) + Webhook (fallback)")
+    st.success(f"🎯 **Workflow ativo**: `{WORKFLOW_ID}` - Leads SDR AMAC")
+    st.caption(f"🔑 API Key: ...{N8N_API_KEY[-10:]}")
+    st.caption(f"🔗 URL: https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID}")
 
 # Logs recentes e debug
 if st.session_state.get("net_logs"):
     with st.expander("📋 Debug - Últimas Operações", expanded=True):
         st.caption("🔍 Acompanhe em tempo real o que está sendo enviado para o n8n:")
         
-        # Mostrar últimos 8 logs
-        recent_logs = st.session_state["net_logs"][-8:]
+        # Mostrar últimos 10 logs
+        recent_logs = st.session_state["net_logs"][-10:]
         for log in recent_logs:
-            if log.get("action") == "STARTING_WORKFLOW":
-                st.info(f"🚀 {log['when']} - Iniciando execução #{log.get('execution', '?')} do workflow")
-            elif log.get("action") == "WORKFLOW_COMPLETED":
-                st.success(f"✅ {log['when']} - Execução #{log.get('execution', '?')} finalizada - Status {log.get('status', '?')}")
-            elif log.get("action") == "WORKFLOW_ERROR":
-                st.error(f"❌ {log['when']} - Erro na execução #{log.get('execution', '?')} - Status {log.get('status', '?')}")
+            action = log.get("action", "")
+            when = log.get("when", "")
+            execution = log.get("execution", "?")
+            
+            if action == "STARTING_WORKFLOW":
+                method = log.get("method", "")
+                st.info(f"🚀 {when} - Iniciando execução #{execution} - {method}")
+            elif action == "ACTIVATING_WORKFLOW":
+                st.warning(f"🔄 {when} - Ativando workflow para execução #{execution}")
+            elif action == "ACTIVATION_FAILED":
+                st.error(f"❌ {when} - Falha ao ativar workflow: {log.get('error', '')}")
+            elif action == "EXECUTING_VIA_API":
+                st.info(f"🔗 {when} - Executando via API - Execução #{execution}")
+            elif action == "FALLBACK_TO_WEBHOOK":
+                st.warning(f"🔄 {when} - API falhou, tentando webhook - Execução #{execution}")
+            elif action == "WORKFLOW_COMPLETED":
+                method = log.get("method", "")
+                status = log.get("status", "")
+                st.success(f"✅ {when} - Execução #{execution} finalizada via {method} - Status: {status}")
+            elif action == "WORKFLOW_ERROR":
+                method = log.get("method", "")
+                status = log.get("status", "")
+                st.error(f"❌ {when} - Erro na execução #{execution} via {method} - Status: {status}")
                 if log.get("error"):
                     st.caption(f"Detalhes: {log['error']}")
-            elif log.get("action") == "EXECUTION_EXCEPTION":
-                st.error(f"🚨 {log['when']} - Exceção na execução: {log.get('error', 'Erro desconhecido')}")
-            elif log.get("action") == "POST":
-                st.write(f"🔗 {log['when']} - HTTP {log.get('status', '?')} - Trigger enviado")
+            elif action == "EXECUTION_EXCEPTION":
+                st.error(f"🚨 {when} - Exceção na execução #{execution}: {log.get('error', 'Erro desconhecido')}")
+            elif action == "POST":
+                st.write(f"🔗 {when} - HTTP {log.get('status', '?')} - Trigger enviado")
         
         # Estatísticas rápidas
         if len(recent_logs) > 0:
             success_count = len([l for l in recent_logs if l.get("action") == "WORKFLOW_COMPLETED"])
             error_count = len([l for l in recent_logs if l.get("action") == "WORKFLOW_ERROR"])
-            st.caption(f"📊 Últimas execuções: {success_count} sucessos, {error_count} erros")
+            api_count = len([l for l in recent_logs if l.get("method") == "API"])
+            webhook_count = len([l for l in recent_logs if l.get("method") == "WEBHOOK"])
+            st.caption(f"📊 Últimas execuções: {success_count} sucessos, {error_count} erros | API: {api_count}, Webhook: {webhook_count}")
 
 # Lógica de execução automática - workflow completo
 if st.session_state.get("loop_active", False):
