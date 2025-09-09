@@ -99,6 +99,15 @@ if "loop_delay" not in st.session_state:
 if "skipped_cycles" not in st.session_state:
     st.session_state["skipped_cycles"] = 0  # Contador de ciclos pulados por duplicatas
 
+if "leads_numbers" not in st.session_state:
+    st.session_state["leads_numbers"] = []  # Lista de números dos leads
+
+if "current_number_index" not in st.session_state:
+    st.session_state["current_number_index"] = 0  # Índice atual na lista de números
+
+if "number_generation_mode" not in st.session_state:
+    st.session_state["number_generation_mode"] = "real_leads"  # Modo: real_leads, random, sequential
+
 st.write(f"📌 Status atual: **{st.session_state['status']}**")
 
 # Mostrar informações do loop se estiver ativo
@@ -288,9 +297,13 @@ def webhook_loop_runner():
     
     while not st.session_state.get("loop_stop_flag", False):
         try:
-            # Fazer chamada ao webhook
+            # Gerar número dinâmico para este ciclo
+            dynamic_number = get_next_dynamic_number()
+            
+            # Fazer chamada ao webhook com número dinâmico
             payload = {
                 "timestamp": time.time(),
+                "numero": dynamic_number,
                 "loop_cycle": st.session_state.get("loop_count", 0) + 1,
                 "continuous_mode": True,
                 "check_duplicates": True  # Sinalizar para o n8n verificar duplicatas
@@ -302,53 +315,31 @@ def webhook_loop_runner():
                 # Incrementar contador de ciclos
                 st.session_state["loop_count"] = st.session_state.get("loop_count", 0) + 1
                 
-                # Tentar extrair informações da resposta sobre o que foi processado
-                try:
-                    response_data = response.json() if response.text else {}
-                    numero_processado = response_data.get("numero") or response_data.get("phone")
-                    
-                    if numero_processado:
-                        # Verificar se o número já foi processado antes
-                        if is_message_already_sent(numero_processado):
-                            skipped_cycles += 1
-                            # Log de número já processado
-                            if "net_logs" in st.session_state:
-                                st.session_state["net_logs"].append({
-                                    "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                    "action": "loop_cycle_skipped_duplicate",
-                                    "cycle": st.session_state["loop_count"],
-                                    "numero": numero_processado,
-                                    "status": "skipped"
-                                })
-                        else:
-                            # Marcar número como processado
-                            mark_message_as_sent(numero_processado, "Mensagem enviada via loop contínuo")
-                            # Log do sucesso com novo número
-                            if "net_logs" in st.session_state:
-                                st.session_state["net_logs"].append({
-                                    "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                    "action": "loop_cycle_success_new_number",
-                                    "cycle": st.session_state["loop_count"],
-                                    "numero": numero_processado,
-                                    "status": response.status_code
-                                })
-                    else:
-                        # Log do sucesso geral (sem número identificado)
-                        if "net_logs" in st.session_state:
-                            st.session_state["net_logs"].append({
-                                "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                "action": "loop_cycle_success",
-                                "cycle": st.session_state["loop_count"],
-                                "status": response.status_code
-                            })
-                            
-                except:
-                    # Se não conseguir parsear a resposta, apenas log do sucesso
+                # Usar o número dinâmico gerado para este ciclo
+                numero_processado = dynamic_number
+                
+                # Verificar se o número já foi processado antes
+                if is_message_already_sent(numero_processado):
+                    skipped_cycles += 1
+                    # Log de número já processado
                     if "net_logs" in st.session_state:
                         st.session_state["net_logs"].append({
                             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                            "action": "loop_cycle_success",
+                            "action": "loop_cycle_skipped_duplicate",
                             "cycle": st.session_state["loop_count"],
+                            "numero": numero_processado,
+                            "status": "skipped"
+                        })
+                else:
+                    # Marcar número como processado
+                    mark_message_as_sent(numero_processado, "Mensagem enviada via loop contínuo")
+                    # Log do sucesso com novo número
+                    if "net_logs" in st.session_state:
+                        st.session_state["net_logs"].append({
+                            "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "action": "loop_cycle_success_new_number",
+                            "cycle": st.session_state["loop_count"],
+                            "numero": numero_processado,
                             "status": response.status_code
                         })
             else:
@@ -396,6 +387,110 @@ def webhook_loop_runner():
             "skipped_cycles": skipped_cycles,
             "unique_numbers": len(st.session_state.get("message_history", {}))
         })
+
+# --- Funções para Números Dinâmicos ---
+def load_leads_numbers():
+    """Carrega números dos leads do arquivo JSON."""
+    try:
+        leads_file = "/Users/guilhermemoreno/Desktop/FrontEnd-N8N/Leads sdr AMAC - FUNCIONANDO copy (1).json"
+        with open(leads_file, 'r', encoding='utf-8') as f:
+            workflow_data = json.load(f)
+        
+        numbers = []
+        
+        # Procurar por números nos nodes do workflow
+        for node in workflow_data.get("nodes", []):
+            if node.get("type") == "n8n-nodes-base.code":
+                js_code = node.get("parameters", {}).get("jsCode", "")
+                
+                # Procurar por números de telefone no código JavaScript
+                import re
+                # Padrões para encontrar números brasileiros
+                patterns = [
+                    r'55\d{10,11}',  # 55 + 10 ou 11 dígitos
+                    r'\d{10,11}',    # 10 ou 11 dígitos
+                    r'5511\d{8,9}',  # 5511 + 8 ou 9 dígitos
+                ]
+                
+                for pattern in patterns:
+                    found_numbers = re.findall(pattern, js_code)
+                    for num in found_numbers:
+                        if len(num) >= 10:  # Pelo menos 10 dígitos
+                            normalized = normalize_phone_number(num)
+                            if normalized and normalized not in numbers:
+                                numbers.append(normalized)
+        
+        # Se não encontrou números no código, usar números de exemplo
+        if not numbers:
+            # Gerar alguns números de exemplo baseados em operadoras brasileiras
+            base_numbers = [
+                "5511999999",  # Vivo SP
+                "5511888888",  # TIM SP  
+                "5511777777",  # Claro SP
+                "5521999999",  # Vivo RJ
+                "5521888888",  # TIM RJ
+                "5531999999",  # Vivo MG
+                "5541999999",  # Vivo PR
+                "5551999999",  # Vivo RS
+            ]
+            
+            for base in base_numbers:
+                for i in range(100, 200):  # Gerar variações
+                    number = f"{base}{i:03d}"
+                    numbers.append(number)
+        
+        st.session_state["leads_numbers"] = numbers
+        return numbers
+        
+    except Exception as e:
+        st.warning(f"Erro ao carregar números dos leads: {e}")
+        # Fallback para números de exemplo
+        example_numbers = []
+        for i in range(1000, 2000):
+            example_numbers.append(f"5511999{i:06d}")
+        st.session_state["leads_numbers"] = example_numbers
+        return example_numbers
+
+def get_next_dynamic_number():
+    """Retorna o próximo número dinâmico baseado no modo configurado."""
+    mode = st.session_state.get("number_generation_mode", "real_leads")
+    
+    if mode == "real_leads":
+        # Usar números dos leads
+        if not st.session_state.get("leads_numbers"):
+            load_leads_numbers()
+        
+        numbers = st.session_state["leads_numbers"]
+        if numbers:
+            current_index = st.session_state.get("current_number_index", 0)
+            if current_index >= len(numbers):
+                # Reiniciar do começo se chegou ao final
+                current_index = 0
+                st.session_state["current_number_index"] = 0
+            
+            number = numbers[current_index]
+            st.session_state["current_number_index"] = current_index + 1
+            return number
+    
+    elif mode == "random":
+        # Gerar número aleatório
+        import random
+        area_codes = ["11", "21", "31", "41", "51", "61", "85"]  # Principais códigos de área
+        area = random.choice(area_codes)
+        prefix = random.choice(["9", "8", "7"])  # Prefixos comuns
+        number = f"55{area}{prefix}{random.randint(10000000, 99999999)}"
+        return number
+    
+    elif mode == "sequential":
+        # Gerar número sequencial
+        base_number = 5511999000000
+        current_index = st.session_state.get("current_number_index", 0)
+        number = str(base_number + current_index)
+        st.session_state["current_number_index"] = current_index + 1
+        return number
+    
+    # Fallback
+    return f"5511999{int(time.time()) % 1000000:06d}"
 
 # --- Funções de Validação e Controle ---
 def normalize_phone_number(phone):
@@ -874,9 +969,47 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
             else:
                 st.info(f"ℹ️ {message}")
     
+    # Configuração de números dinâmicos
+    st.markdown("**📱 Configuração de Números Dinâmicos:**")
+    
+    col_num1, col_num2 = st.columns(2)
+    with col_num1:
+        mode = st.selectbox(
+            "Modo de geração de números:",
+            ["real_leads", "random", "sequential"],
+            index=["real_leads", "random", "sequential"].index(st.session_state.get("number_generation_mode", "real_leads")),
+            help="real_leads: usa números do arquivo de leads; random: gera aleatórios; sequential: sequencial"
+        )
+        if mode != st.session_state.get("number_generation_mode"):
+            st.session_state["number_generation_mode"] = mode
+            st.session_state["current_number_index"] = 0  # Reset index
+            st.success(f"✅ Modo alterado para: {mode}")
+    
+    with col_num2:
+        if st.button("🔄 Carregar Números dos Leads"):
+            numbers = load_leads_numbers()
+            st.success(f"✅ Carregados {len(numbers)} números dos leads")
+            st.info(f"📱 Primeiros números: {numbers[:3]}...")
+    
+    # Mostrar informações do modo atual
+    mode_info = {
+        "real_leads": "📋 Usando números reais dos leads",
+        "random": "🎲 Gerando números aleatórios",
+        "sequential": "🔢 Gerando números sequenciais"
+    }
+    st.info(mode_info.get(st.session_state.get("number_generation_mode", "real_leads"), ""))
+    
+    # Mostrar próximo número que será usado
+    if st.button("👀 Ver Próximo Número"):
+        next_num = get_next_dynamic_number()
+        st.code(f"Próximo número: {next_num}")
+        # Voltar o índice para não consumir o número
+        if st.session_state.get("number_generation_mode") != "random":
+            st.session_state["current_number_index"] = max(0, st.session_state.get("current_number_index", 0) - 1)
+    
     # Histórico de mensagens (apenas para controle visual)
     st.markdown("**📊 Histórico de Mensagens:**")
-    st.info("💡 O fluxo agora roda continuamente até ser parado manualmente pelo usuário.")
+    st.info("💡 O fluxo agora usa números dinâmicos e roda continuamente até ser parado manualmente.")
     
     # Controles manuais de ativação/desativação
     if st.session_state.get("workflow_id"):
@@ -1185,7 +1318,9 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
     elif st.session_state["status"] == "Erro":
         st.error("🔴 Último disparo falhou")
 
-    default_payload = {"timestamp": time.time(), "numero": "5511999999999"}
+    # Gerar payload dinâmico para teste
+    dynamic_test_number = get_next_dynamic_number()
+    default_payload = {"timestamp": time.time(), "numero": dynamic_test_number}
     payload_text = st.text_area("Payload (JSON)", value=json.dumps(default_payload, ensure_ascii=False))
 
     test_payload = None
