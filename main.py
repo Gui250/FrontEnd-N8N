@@ -96,25 +96,47 @@ if "loop_stop_flag" not in st.session_state:
 if "loop_delay" not in st.session_state:
     st.session_state["loop_delay"] = 10  # Delay padrão de 10 segundos entre chamadas
 
+if "skipped_cycles" not in st.session_state:
+    st.session_state["skipped_cycles"] = 0  # Contador de ciclos pulados por duplicatas
+
 st.write(f"📌 Status atual: **{st.session_state['status']}**")
 
 # Mostrar informações do loop se estiver ativo
 if st.session_state.get("loop_active", False):
-    col_loop1, col_loop2, col_loop3 = st.columns(3)
+    col_loop1, col_loop2, col_loop3, col_loop4 = st.columns(4)
     with col_loop1:
         st.metric("🔄 Loop Ativo", "SIM", delta="Executando continuamente")
     with col_loop2:
         loop_count = st.session_state.get("loop_count", 0)
-        st.metric("📊 Ciclos Executados", loop_count)
+        st.metric("📊 Total de Ciclos", loop_count)
     with col_loop3:
+        unique_numbers = len(st.session_state.get("message_history", {}))
+        st.metric("📱 Números Únicos", unique_numbers, delta="Mensagens enviadas")
+    with col_loop4:
+        skipped = st.session_state.get("skipped_cycles", 0)
+        st.metric("⏭️ Ciclos Pulados", skipped, delta="Duplicatas evitadas")
+    
+    # Segunda linha de métricas
+    col_time1, col_time2, col_time3 = st.columns(3)
+    with col_time1:
         if "execution_start_time" in st.session_state:
             runtime = time.time() - st.session_state["execution_start_time"]
             st.metric("⏱️ Tempo Ativo", f"{runtime:.0f}s")
         else:
             st.metric("⏱️ Tempo Ativo", "0s")
+    with col_time2:
+        if loop_count > 0:
+            efficiency = (unique_numbers / loop_count) * 100
+            st.metric("📈 Eficiência", f"{efficiency:.1f}%", delta="Novos números/ciclos")
+        else:
+            st.metric("📈 Eficiência", "0%")
+    with col_time3:
+        next_call = st.session_state.get("loop_delay", 10)
+        st.metric("⏳ Próxima Chamada", f"{next_call}s", delta="Intervalo configurado")
     
-    st.success("🟢 **LOOP REAL ATIVO** - Webhook sendo chamado automaticamente em background")
+    st.success("🟢 **LOOP INTELIGENTE ATIVO** - Enviando apenas uma mensagem por número único")
     st.info("💡 Para parar o loop, clique no botão 'Parar Fluxo' abaixo")
+    st.info("🛡️ Duplicatas são automaticamente detectadas e puladas, mantendo o loop ativo")
     
     # Auto-refresh para atualizar métricas
     if st.button("🔄 Atualizar Métricas", help="Clique para ver as métricas mais recentes"):
@@ -259,9 +281,10 @@ if st.session_state.get("wait_url"):
 
 # --- Função do Loop Contínuo ---
 def webhook_loop_runner():
-    """Executa o loop contínuo chamando o webhook repetidamente."""
+    """Executa o loop contínuo chamando o webhook repetidamente, enviando apenas uma mensagem por número."""
     webhook_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL)
     loop_delay = st.session_state.get("loop_delay", 10)  # Delay entre chamadas em segundos
+    skipped_cycles = 0  # Contador de ciclos onde números já foram processados
     
     while not st.session_state.get("loop_stop_flag", False):
         try:
@@ -269,7 +292,8 @@ def webhook_loop_runner():
             payload = {
                 "timestamp": time.time(),
                 "loop_cycle": st.session_state.get("loop_count", 0) + 1,
-                "continuous_mode": True
+                "continuous_mode": True,
+                "check_duplicates": True  # Sinalizar para o n8n verificar duplicatas
             }
             
             response = call_webhook(webhook_url, payload, timeout=30, force_send=True)
@@ -278,14 +302,55 @@ def webhook_loop_runner():
                 # Incrementar contador de ciclos
                 st.session_state["loop_count"] = st.session_state.get("loop_count", 0) + 1
                 
-                # Log do sucesso
-                if "net_logs" in st.session_state:
-                    st.session_state["net_logs"].append({
-                        "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "action": "loop_cycle_success",
-                        "cycle": st.session_state["loop_count"],
-                        "status": response.status_code
-                    })
+                # Tentar extrair informações da resposta sobre o que foi processado
+                try:
+                    response_data = response.json() if response.text else {}
+                    numero_processado = response_data.get("numero") or response_data.get("phone")
+                    
+                    if numero_processado:
+                        # Verificar se o número já foi processado antes
+                        if is_message_already_sent(numero_processado):
+                            skipped_cycles += 1
+                            # Log de número já processado
+                            if "net_logs" in st.session_state:
+                                st.session_state["net_logs"].append({
+                                    "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                    "action": "loop_cycle_skipped_duplicate",
+                                    "cycle": st.session_state["loop_count"],
+                                    "numero": numero_processado,
+                                    "status": "skipped"
+                                })
+                        else:
+                            # Marcar número como processado
+                            mark_message_as_sent(numero_processado, "Mensagem enviada via loop contínuo")
+                            # Log do sucesso com novo número
+                            if "net_logs" in st.session_state:
+                                st.session_state["net_logs"].append({
+                                    "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                    "action": "loop_cycle_success_new_number",
+                                    "cycle": st.session_state["loop_count"],
+                                    "numero": numero_processado,
+                                    "status": response.status_code
+                                })
+                    else:
+                        # Log do sucesso geral (sem número identificado)
+                        if "net_logs" in st.session_state:
+                            st.session_state["net_logs"].append({
+                                "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "action": "loop_cycle_success",
+                                "cycle": st.session_state["loop_count"],
+                                "status": response.status_code
+                            })
+                            
+                except:
+                    # Se não conseguir parsear a resposta, apenas log do sucesso
+                    if "net_logs" in st.session_state:
+                        st.session_state["net_logs"].append({
+                            "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "action": "loop_cycle_success",
+                            "cycle": st.session_state["loop_count"],
+                            "status": response.status_code
+                        })
             else:
                 # Log do erro
                 if "net_logs" in st.session_state:
@@ -296,6 +361,9 @@ def webhook_loop_runner():
                         "status": response.status_code,
                         "error": response.text[:200]
                     })
+            
+            # Atualizar contador de ciclos pulados
+            st.session_state["skipped_cycles"] = skipped_cycles
             
             # Aguardar antes da próxima chamada (se não foi solicitada parada)
             for i in range(loop_delay):
@@ -324,7 +392,9 @@ def webhook_loop_runner():
         st.session_state["net_logs"].append({
             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
             "action": "loop_stopped",
-            "total_cycles": st.session_state.get("loop_count", 0)
+            "total_cycles": st.session_state.get("loop_count", 0),
+            "skipped_cycles": skipped_cycles,
+            "unique_numbers": len(st.session_state.get("message_history", {}))
         })
 
 # --- Funções de Validação e Controle ---
@@ -569,10 +639,12 @@ def iniciar_fluxo():
     st.session_state["execution_start_time"] = time.time()
     st.session_state["loop_active"] = True
     st.session_state["loop_count"] = 0
+    st.session_state["skipped_cycles"] = 0
     st.session_state["loop_stop_flag"] = False
     
-    st.success("🔄 **Iniciando LOOP CONTÍNUO REAL!**")
-    st.info("💡 O sistema vai chamar o webhook n8n repetidamente até você clicar em 'Parar Fluxo'")
+    st.success("🔄 **Iniciando LOOP CONTÍNUO COM CONTROLE DE DUPLICATAS!**")
+    st.info("💡 O sistema vai chamar o webhook n8n repetidamente, mas enviará apenas UMA mensagem por número")
+    st.info("🛡️ Números já processados serão pulados automaticamente, mantendo o loop ativo")
     
     # Iniciar thread do loop em background
     try:
@@ -752,8 +824,9 @@ if st.session_state.get("loop_active", False):
             for log in loop_logs:
                 st.write(f"**{log['when']}** - {log['action']}: {log.get('cycle', 'N/A')}")
 else:
-    st.info("🔄 **MODO LOOP REAL** - Clique em 'Iniciar Fluxo' para chamar o webhook repetidamente até parar manualmente")
-    st.warning("💡 **Novo**: Agora o sistema faz chamadas reais e contínuas ao webhook em background!")
+    st.info("🔄 **MODO LOOP INTELIGENTE** - Clique em 'Iniciar Fluxo' para processar leads continuamente")
+    st.success("✨ **Funcionalidade**: Loop contínuo + Controle de duplicatas automático")
+    st.info("🛡️ Sistema envia apenas UMA mensagem por número, pulando duplicatas automaticamente")
 
 st.info("📊 A seção de análise foi movida para a página 'Dashboard' no menu lateral.")
 
