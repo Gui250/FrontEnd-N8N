@@ -58,6 +58,11 @@ def test_webhook_connection():
             st.success("✅ Webhook1 está funcionando perfeitamente!")
             st.balloons()
             return True
+        elif response.status_code == 404:
+            st.error("🚨 **WEBHOOK NÃO REGISTRADO (404)**")
+            st.error("❌ O workflow não está ativo no n8n!")
+            show_activation_instructions()
+            return False
         else:
             st.error(f"❌ Webhook retornou erro: {response.status_code}")
             st.code(response.text[:300] if response.text else "Sem resposta")
@@ -66,6 +71,40 @@ def test_webhook_connection():
     except Exception as e:
         st.error(f"❌ Erro ao testar webhook: {e}")
         return False
+
+def show_activation_instructions():
+    """Mostra instruções detalhadas para ativar o workflow."""
+    st.markdown("### 🔧 INSTRUÇÕES PARA ATIVAR O WORKFLOW:")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        **📋 PASSO A PASSO:**
+        1. **Acesse**: https://projeto01-n8n.peitvn.easypanel.host
+        2. **Faça login** na sua conta n8n
+        3. **Encontre o workflow**: "Leads sdr AMAC - FUNCIONANDO copy"
+        4. **Abra o workflow** clicando nele
+        5. **Ative**: Clique no toggle "Active" (canto superior direito)
+        6. **Confirme**: O toggle deve ficar verde
+        """)
+    
+    with col2:
+        st.markdown("""
+        **✅ COMO SABER SE ESTÁ ATIVO:**
+        - Toggle "Active" deve estar **verde/ligado**
+        - Aparece "Active" ao lado do nome do workflow
+        - Webhook fica disponível para receber requisições
+        
+        **🔄 DEPOIS DE ATIVAR:**
+        - Volte aqui e clique "🔍 TESTAR WEBHOOK1"
+        - Deve retornar Status 200 (sucesso)
+        """)
+    
+    st.warning("⚠️ **IMPORTANTE**: O workflow DEVE estar ativo para o webhook funcionar!")
+    
+    if st.button("🔄 TESTAR NOVAMENTE APÓS ATIVAÇÃO", key="retest"):
+        st.rerun()
 
 def execute_webhook1():
     """Executa o Webhook1 com dados de teste para o Google Sheets."""
