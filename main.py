@@ -3,6 +3,7 @@ import requests
 import time
 import json
 import base64
+import threading
 from requests.exceptions import ReadTimeout
 try:
     from streamlit_lottie import st_lottie
@@ -85,6 +86,12 @@ if "loop_active" not in st.session_state:
 
 if "loop_count" not in st.session_state:
     st.session_state["loop_count"] = 0
+
+if "loop_thread" not in st.session_state:
+    st.session_state["loop_thread"] = None
+
+if "loop_stop_flag" not in st.session_state:
+    st.session_state["loop_stop_flag"] = False
 
 st.write(f"📌 Status atual: **{st.session_state['status']}**")
 
@@ -245,6 +252,76 @@ if st.session_state.get("wait_url"):
             st.error(f"Erro de validação: {ve}")
         except Exception as e:
             st.error(f"Erro ao tentar liberar o fluxo: {e}")
+
+# --- Função do Loop Contínuo ---
+def webhook_loop_runner():
+    """Executa o loop contínuo chamando o webhook repetidamente."""
+    webhook_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL)
+    loop_delay = st.session_state.get("loop_delay", 10)  # Delay entre chamadas em segundos
+    
+    while not st.session_state.get("loop_stop_flag", False):
+        try:
+            # Fazer chamada ao webhook
+            payload = {
+                "timestamp": time.time(),
+                "loop_cycle": st.session_state.get("loop_count", 0) + 1,
+                "continuous_mode": True
+            }
+            
+            response = call_webhook(webhook_url, payload, timeout=30, force_send=True)
+            
+            if response.status_code == 200:
+                # Incrementar contador de ciclos
+                st.session_state["loop_count"] = st.session_state.get("loop_count", 0) + 1
+                
+                # Log do sucesso
+                if "net_logs" in st.session_state:
+                    st.session_state["net_logs"].append({
+                        "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "action": "loop_cycle_success",
+                        "cycle": st.session_state["loop_count"],
+                        "status": response.status_code
+                    })
+            else:
+                # Log do erro
+                if "net_logs" in st.session_state:
+                    st.session_state["net_logs"].append({
+                        "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "action": "loop_cycle_error",
+                        "cycle": st.session_state.get("loop_count", 0),
+                        "status": response.status_code,
+                        "error": response.text[:200]
+                    })
+            
+            # Aguardar antes da próxima chamada (se não foi solicitada parada)
+            for i in range(loop_delay):
+                if st.session_state.get("loop_stop_flag", False):
+                    break
+                time.sleep(1)
+                
+        except Exception as e:
+            # Log do erro de exceção
+            if "net_logs" in st.session_state:
+                st.session_state["net_logs"].append({
+                    "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "action": "loop_exception",
+                    "error": str(e)
+                })
+            
+            # Aguardar antes de tentar novamente
+            for i in range(5):  # Aguarda 5 segundos em caso de erro
+                if st.session_state.get("loop_stop_flag", False):
+                    break
+                time.sleep(1)
+    
+    # Loop foi parado
+    st.session_state["loop_active"] = False
+    if "net_logs" in st.session_state:
+        st.session_state["net_logs"].append({
+            "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "action": "loop_stopped",
+            "total_cycles": st.session_state.get("loop_count", 0)
+        })
 
 # --- Funções de Validação e Controle ---
 def normalize_phone_number(phone):
@@ -477,50 +554,36 @@ def iniciar_fluxo():
         elif is_active is True:
             st.info("✅ Workflow confirmado como ativo. Iniciando loop contínuo...")
         
-    # Marcar como iniciando e em loop contínuo
+    # Parar thread anterior se existir
+    if st.session_state.get("loop_thread") and st.session_state["loop_thread"].is_alive():
+        st.warning("⚠️ Parando loop anterior...")
+        st.session_state["loop_stop_flag"] = True
+        st.session_state["loop_thread"].join(timeout=5)
+    
+    # Configurar novo loop
     st.session_state["status"] = "Em Execução"
     st.session_state["execution_start_time"] = time.time()
     st.session_state["loop_active"] = True
     st.session_state["loop_count"] = 0
+    st.session_state["loop_stop_flag"] = False
     
-    st.success("🔄 **Fluxo iniciado em modo LOOP CONTÍNUO!**")
-    st.info("💡 O workflow n8n vai processar leads continuamente até você clicar em 'Parar Fluxo'")
+    st.success("🔄 **Iniciando LOOP CONTÍNUO REAL!**")
+    st.info("💡 O sistema vai chamar o webhook n8n repetidamente até você clicar em 'Parar Fluxo'")
     
-    # Iniciar o primeiro ciclo do loop
+    # Iniciar thread do loop em background
     try:
-        with st.spinner("Iniciando primeiro ciclo do loop..."):
-            target_url = st.session_state.get("webhook_url") or WEBHOOK_MAIN_URL
-            # Enviar comando para iniciar loop contínuo
-            response = call_webhook(target_url, {
-                "command": "start_continuous_loop",
-                "timestamp": time.time(),
-                "loop_id": f"loop_{int(time.time())}"
-            }, force_send=True)
-            
-        if response.status_code == 200:
-            st.session_state["loop_count"] += 1
-            st.success(f"✅ Loop contínuo iniciado! Ciclo #{st.session_state['loop_count']}")
-        elif response.status_code == 404 and "not registered" in response.text:
-            st.session_state["status"] = "Erro"
-            st.session_state["loop_active"] = False
-            st.error("❌ **Workflow não está ativo no n8n!**")
-            st.markdown("""
-            **Para resolver este problema:**
-            1. 🔗 Acesse seu n8n: https://projeto01-n8n.peitvn.easypanel.host
-            2. 📝 Abra o workflow que contém este webhook
-            3. 🔄 **Ative o workflow** usando o toggle no canto superior direito do editor
-            4. ✅ Tente iniciar o fluxo novamente
-            
-            💡 **Dica**: Workflows inativos não podem receber chamadas de production URL.
-            """)
-        else:
-            st.session_state["status"] = "Erro"
-            st.session_state["loop_active"] = False
-            st.error(f"Erro ao iniciar loop: {response.status_code} - {response.text}")
+        loop_thread = threading.Thread(target=webhook_loop_runner, daemon=True)
+        loop_thread.start()
+        st.session_state["loop_thread"] = loop_thread
+        
+        st.success("✅ **Loop contínuo iniciado com sucesso!**")
+        st.info("🔄 O webhook está sendo chamado automaticamente em background")
+        st.info("📊 Acompanhe o progresso nas métricas acima")
+        
     except Exception as e:
         st.session_state["status"] = "Erro"
         st.session_state["loop_active"] = False
-        st.error(f"Erro: {e}")
+        st.error(f"Erro ao iniciar thread do loop: {e}")
 
 def activate_workflow(workflow_id, api_key, activate=True):
     """Ativa ou desativa um workflow no n8n."""
@@ -582,21 +645,19 @@ def parar_fluxo():
     # Parar o loop contínuo primeiro
     if st.session_state.get("loop_active", False):
         st.info("🛑 Parando loop contínuo...")
-        try:
-            # Enviar comando para parar loop
-            target_url = st.session_state.get("webhook_url") or WEBHOOK_MAIN_URL
-            response = call_webhook(target_url, {
-                "command": "stop_continuous_loop",
-                "timestamp": time.time(),
-                "final_cycle": True
-            }, force_send=True)
+        
+        # Sinalizar para a thread parar
+        st.session_state["loop_stop_flag"] = True
+        
+        # Aguardar thread terminar
+        if st.session_state.get("loop_thread") and st.session_state["loop_thread"].is_alive():
+            with st.spinner("Aguardando thread do loop parar..."):
+                st.session_state["loop_thread"].join(timeout=10)
             
-            if response.status_code == 200:
-                st.success("✅ Comando de parada enviado para o loop contínuo!")
+            if st.session_state["loop_thread"].is_alive():
+                st.warning("⚠️ Thread do loop não parou completamente, mas foi sinalizada para parar")
             else:
-                st.warning(f"⚠️ Resposta do comando de parada: {response.status_code}")
-        except Exception as e:
-            st.warning(f"Erro ao enviar comando de parada: {e}")
+                st.success("✅ Thread do loop parada com sucesso!")
     
     # Usar API Key padrão se não estiver configurada
     api_key = st.session_state.get("n8n_api_key") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3MzUyODYxfQ.2RTE1LNNfX2VIImn3Obncd0f_MnOBap7qJzeb2gwo_c"
