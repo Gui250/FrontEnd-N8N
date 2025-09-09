@@ -93,6 +93,9 @@ if "loop_thread" not in st.session_state:
 if "loop_stop_flag" not in st.session_state:
     st.session_state["loop_stop_flag"] = False
 
+if "loop_delay" not in st.session_state:
+    st.session_state["loop_delay"] = 10  # Delay padrão de 10 segundos entre chamadas
+
 st.write(f"📌 Status atual: **{st.session_state['status']}**")
 
 # Mostrar informações do loop se estiver ativo
@@ -110,8 +113,12 @@ if st.session_state.get("loop_active", False):
         else:
             st.metric("⏱️ Tempo Ativo", "0s")
     
-    st.success("🟢 **MODO LOOP CONTÍNUO ATIVO** - O fluxo está processando leads automaticamente")
+    st.success("🟢 **LOOP REAL ATIVO** - Webhook sendo chamado automaticamente em background")
     st.info("💡 Para parar o loop, clique no botão 'Parar Fluxo' abaixo")
+    
+    # Auto-refresh para atualizar métricas
+    if st.button("🔄 Atualizar Métricas", help="Clique para ver as métricas mais recentes"):
+        st.rerun()
 
 # Seção de alertas removida - fluxo só para com intervenção manual
 
@@ -206,30 +213,27 @@ def call_webhook(url, payload=None, timeout=None, force_send=False):
             })
         raise e
 
-# Manter loop ativo através de heartbeat
-if st.session_state.get("loop_active", False) and st.session_state.get("status") == "Em Execução":
-    # Auto-refresh a cada 30 segundos para manter o loop ativo
-    time.sleep(0.1)  # Pequeno delay para não sobrecarregar
+# Status da thread do loop
+if st.session_state.get("loop_active", False):
+    thread_status = "🟢 Ativa" if (st.session_state.get("loop_thread") and st.session_state["loop_thread"].is_alive()) else "🔴 Inativa"
+    st.info(f"🔄 **Thread do Loop**: {thread_status}")
     
-    # Mostrar botão para continuar loop manualmente se necessário
-    if st.button("🔄 Continuar Loop Agora", help="Força a continuação imediata do loop"):
-        try:
-            with st.spinner("Continuando loop..."):
-                target_url = st.session_state.get("webhook_url") or WEBHOOK_MAIN_URL
-                response = call_webhook(target_url, {
-                    "command": "continue_loop",
-                    "timestamp": time.time(),
-                    "cycle": st.session_state.get("loop_count", 0) + 1
-                }, force_send=True)
-            
-            if response.status_code == 200:
-                st.session_state["loop_count"] = st.session_state.get("loop_count", 0) + 1
-                st.success(f"✅ Loop continuado! Ciclo #{st.session_state['loop_count']}")
-                st.rerun()
-            else:
-                st.warning(f"⚠️ Resposta do loop: {response.status_code} - {response.text}")
-        except Exception as e:
-            st.error(f"Erro ao continuar loop: {e}")
+    # Controle de delay entre chamadas
+    col_delay1, col_delay2 = st.columns([1, 2])
+    with col_delay1:
+        new_delay = st.number_input(
+            "Delay entre chamadas (segundos)", 
+            min_value=5, 
+            max_value=300, 
+            value=st.session_state.get("loop_delay", 10),
+            step=5,
+            help="Tempo de espera entre cada chamada ao webhook"
+        )
+        if new_delay != st.session_state.get("loop_delay"):
+            st.session_state["loop_delay"] = new_delay
+            st.success(f"✅ Delay atualizado para {new_delay}s")
+    with col_delay2:
+        st.info(f"⏱️ Próxima chamada em até {st.session_state.get('loop_delay', 10)} segundos")
 
 # Exibir a URL de espera gerada, se houver (mantido para compatibilidade)
 if st.session_state.get("wait_url"):
@@ -737,10 +741,19 @@ st.divider()
 
 # Informações sobre o modo de operação
 if st.session_state.get("loop_active", False):
-    st.info("🔄 **MODO LOOP CONTÍNUO ATIVO** - O workflow n8n está processando leads automaticamente")
+    st.info("🔄 **LOOP REAL ATIVO** - Sistema chamando webhook automaticamente em background")
     st.success("✅ Para parar o loop, use o botão 'Parar Fluxo' acima")
+    
+    # Mostrar últimos logs do loop
+    logs = st.session_state.get("net_logs", [])
+    loop_logs = [log for log in logs[-5:] if "loop" in log.get("action", "")]
+    if loop_logs:
+        with st.expander("📋 Últimos eventos do loop"):
+            for log in loop_logs:
+                st.write(f"**{log['when']}** - {log['action']}: {log.get('cycle', 'N/A')}")
 else:
-    st.info("🔄 **MODO LOOP CONTÍNUO** - Clique em 'Iniciar Fluxo' para processar leads continuamente até parar manualmente")
+    st.info("🔄 **MODO LOOP REAL** - Clique em 'Iniciar Fluxo' para chamar o webhook repetidamente até parar manualmente")
+    st.warning("💡 **Novo**: Agora o sistema faz chamadas reais e contínuas ao webhook em background!")
 
 st.info("📊 A seção de análise foi movida para a página 'Dashboard' no menu lateral.")
 
