@@ -6,7 +6,7 @@ from requests.exceptions import ReadTimeout
 # Configurações principais
 WEBHOOK_MAIN_URL = "https://projeto01-n8n.peitvn.easypanel.host/webhook/b877c4b1-4eb2-475f-aead-117d6d89614c"
 WORKFLOW_ID = "5w9w7VyDWF2d4V7c"  # Workflow ID correto extraído da URL
-N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3NDM2NTA0fQ.P5grlimwkQoQsPuHBsU3aDckq82-SDWtaOWGtaoUPHg"
+N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3NDM2ODYwfQ.EcLw5O_-m3jQuZ1TS7mwthh6yxV_6AsZbmARYAHDu-Q"
 N8N_BASE_URL = "https://projeto01-n8n.peitvn.easypanel.host"
 
 st.set_page_config(layout="wide", page_title="Controle n8n Loop", page_icon="⚙️")
@@ -14,6 +14,7 @@ st.title("🔄 Controle do Fluxo n8n - Loop Inteligente")
 
 # Informações do workflow
 st.info(f"🎯 **Workflow alvo**: `{WORKFLOW_ID}` - Leads SDR AMAC | 🔗 [Abrir no n8n](https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID})")
+
 st.success("✨ **Para testar**: Abra a seção 'Configurações' abaixo e clique em 'EXECUTAR TESTE COMPLETO'")
 
 # --- Inicialização do Estado ---
@@ -323,11 +324,14 @@ with col3:
 
 # Configurações
 with st.expander("⚙️ Configurações", expanded=False):
+    st.markdown("**🔗 Configuração do Webhook:**")
     st.session_state["webhook_url"] = st.text_input(
         "URL do Webhook n8n",
         value=st.session_state.get("webhook_url", WEBHOOK_MAIN_URL),
         help="URL do webhook que iniciará o workflow completo no n8n"
     )
+    
+    st.divider()
 
     # Teste rápido principal
     st.markdown("**🚀 TESTE COMPLETO DO WORKFLOW:**")
@@ -440,7 +444,7 @@ with st.expander("⚙️ Configurações", expanded=False):
     
     st.info("💡 **Métodos de execução**: API (mais confiável) + Webhook (fallback)")
     st.success(f"🎯 **Workflow ativo**: `{WORKFLOW_ID}` - Leads SDR AMAC")
-    st.caption(f"🔑 API Key: ...{N8N_API_KEY[-10:]}")
+    st.success(f"🔑 API Key: ...{N8N_API_KEY[-10:]} (Configurada)")
     st.caption(f"🔗 URL: https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID}")
 
 # Logs recentes e debug
