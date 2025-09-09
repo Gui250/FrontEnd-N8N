@@ -41,8 +41,7 @@ def test_webhook_connection():
         
         test_payload = {
             "test": True,
-            "timestamp": time.time(),
-            "source": "streamlit_test"
+            "timestamp": time.time()
         }
         
         response = call_webhook(WEBHOOK_LEADS, test_payload, timeout=15)
@@ -97,8 +96,8 @@ def show_activation_instructions():
         - Webhook fica disponível para receber requisições
         
         **🔄 DEPOIS DE ATIVAR:**
-        - Volte aqui e clique "🔍 TESTAR WEBHOOK1"
-        - Deve retornar Status 200 (sucesso)
+        - Volte aqui e clique "🚀 INICIAR FLUXO"
+        - Deve iniciar o processamento dos leads
         """)
     
     st.warning("⚠️ **IMPORTANTE**: O workflow DEVE estar ativo para o webhook funcionar!")
@@ -164,8 +163,8 @@ def init_session_state():
 init_session_state()
 
 # ========== INTERFACE PRINCIPAL ==========
-st.set_page_config(layout="wide", page_title="Webhook1 Controller", page_icon="🚀")
-st.title("🚀 Controle do Webhook1 - AMAC Leads")
+st.set_page_config(layout="wide", page_title="Iniciar Fluxo AMAC", page_icon="🚀")
+st.title("🚀 Iniciar Fluxo de Leads - AMAC")
 
 # Informações do workflow
 st.info(f"🎯 **Workflow ID**: `{WORKFLOW_ID}` | 🔗 [Abrir no n8n]({N8N_BASE_URL}/workflow/{WORKFLOW_ID})")
@@ -174,7 +173,7 @@ st.info(f"🎯 **Workflow ID**: `{WORKFLOW_ID}` | 🔗 [Abrir no n8n]({N8N_BASE_
 def check_workflow_status_display():
     """Verifica e exibe o status do workflow."""
     try:
-        test_payload = {"status_check": True, "timestamp": time.time()}
+        test_payload = {"status_check": True}
         response = requests.post(WEBHOOK_LEADS, json=test_payload, timeout=5)
         
         if response.status_code == 200:
@@ -267,8 +266,8 @@ with st.expander("📋 Como ativar o workflow no n8n (Manual)", expanded=False):
     **✅ Pronto!** O Webhook1 estará ativo e funcionando.
     
     **🎯 Depois de ativar manualmente:**
-    - Use o botão "🚀 EXECUTAR WEBHOOK1" nesta página
-    - O workflow processará os dados automaticamente
+    - Use o botão "🚀 INICIAR FLUXO" nesta página
+    - O workflow processará os leads do Google Sheets automaticamente
     - Acompanhe os logs abaixo para ver o progresso
     """)
 
@@ -336,25 +335,19 @@ with st.expander("🔧 Informações Técnicas", expanded=False):
     
     **🌐 n8n Base URL**: `{N8N_BASE_URL}`
     
-    **📋 Estrutura do Payload**:
+    **📋 Payload de Inicialização**:
     ```json
     {{
-      "empresas": [
-        {{
-          "nome_empresa": "Nome da Empresa",
-          "telefone": "11999999999",
-          "website": "https://site.com.br",
-          "rating": "4.5",
-          "reviews": "100",
-          "especialidades": "Área de atuação",
-          "mensagem": "",
-          "disparo": "nao"
-        }}
-      ],
+      "trigger": "start_workflow",
       "timestamp": 1234567890,
-      "source": "streamlit_controller"
+      "source": "streamlit_trigger"
     }}
     ```
+    
+    **ℹ️ Como funciona**:
+    - O webhook apenas **inicia** o fluxo
+    - O workflow processa os dados que já estão no **Google Sheets**
+    - Não enviamos dados específicos, apenas disparamos o processamento
     
     **🎯 Fluxo do Workflow**:
     1. Webhook1 recebe os dados
@@ -369,4 +362,4 @@ with st.expander("🔧 Informações Técnicas", expanded=False):
     """)
 
 st.markdown("---")
-st.caption("🚀 Webhook1 Controller - Versão simplificada sem dependência de API")
+st.caption("🚀 Iniciar Fluxo - Versão simplificada que apenas dispara o workflow")
