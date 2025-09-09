@@ -106,69 +106,43 @@ def show_activation_instructions():
     if st.button("🔄 TESTAR NOVAMENTE APÓS ATIVAÇÃO", key="retest"):
         st.rerun()
 
-def execute_webhook1():
-    """Executa o Webhook1 com dados de teste para o Google Sheets."""
+def iniciar_fluxo():
+    """Inicia o fluxo do workflow sem enviar dados específicos."""
     try:
-        # Dados de teste para o workflow processar
-        test_data = [
-            {
-                "nome_empresa": "Empresa Teste AMAC",
-                "telefone": "11999999999",
-                "endereco": "São Paulo, SP, Brasil",
-                "website": "https://exemplo.com.br",
-                "rating": "4.5",
-                "reviews": "150",
-                "especialidades": "Segurança eletrônica, CFTV",
-                "mensagem": "",  # Vazio para que o workflow processe
-                "disparo": "nao"  # Para que passe pelo filtro If1
-            },
-            {
-                "nome_empresa": "Academia Fitness Pro",
-                "telefone": "11888888888",
-                "endereco": "Rio de Janeiro, RJ, Brasil",
-                "website": "https://academia-pro.com.br",
-                "rating": "4.8",
-                "reviews": "200",
-                "especialidades": "Academia, Fitness, Musculação",
-                "mensagem": "",
-                "disparo": "nao"
-            }
-        ]
-        
         st.session_state["operation_logs"].append({
             "timestamp": time.strftime("%H:%M:%S"),
-            "action": "🚀 INICIANDO_WEBHOOK1",
-            "details": f"Enviando {len(test_data)} empresas para processamento"
+            "action": "🚀 INICIANDO_FLUXO",
+            "details": "Disparando o workflow para processar dados do Google Sheets"
         })
         
-        # Payload no formato esperado pelo workflow
+        # Payload mínimo apenas para iniciar o fluxo
         payload = {
-            "empresas": test_data,
+            "trigger": "start_workflow",
             "timestamp": time.time(),
-            "source": "streamlit_controller"
+            "source": "streamlit_trigger"
         }
         
-        # Chamar Webhook1
+        # Chamar Webhook1 apenas para iniciar
         response = call_webhook(WEBHOOK_LEADS, payload, timeout=60)
         
         if response.status_code == 200:
             st.session_state["operation_logs"].append({
                 "timestamp": time.strftime("%H:%M:%S"),
-                "action": "✅ WEBHOOK1_SUCCESS",
-                "details": f"Workflow executado com sucesso! Status: {response.status_code}"
+                "action": "✅ FLUXO_INICIADO",
+                "details": f"Fluxo iniciado com sucesso! Status: {response.status_code}"
             })
-            return True, "Webhook1 executado com sucesso! O workflow está processando os dados."
+            return True, "🚀 Fluxo iniciado! O workflow está processando os dados do Google Sheets."
         elif response.status_code == 404:
             st.session_state["operation_logs"].append({
                 "timestamp": time.strftime("%H:%M:%S"),
-                "action": "❌ WEBHOOK1_NOT_ACTIVE",
+                "action": "❌ WORKFLOW_INATIVO",
                 "details": "Workflow não está ativo - erro 404"
             })
             return False, "WORKFLOW NÃO ESTÁ ATIVO! Você precisa ativar o workflow no n8n primeiro."
         else:
             st.session_state["operation_logs"].append({
                 "timestamp": time.strftime("%H:%M:%S"),
-                "action": "❌ WEBHOOK1_ERROR",
+                "action": "❌ ERRO_FLUXO",
                 "details": f"Erro {response.status_code}: {response.text[:100]}"
             })
             return False, f"Erro {response.status_code}: {response.text[:200]}"
@@ -176,7 +150,7 @@ def execute_webhook1():
     except Exception as e:
         st.session_state["operation_logs"].append({
             "timestamp": time.strftime("%H:%M:%S"),
-            "action": "🚨 WEBHOOK1_EXCEPTION",
+            "action": "🚨 EXCECAO_FLUXO",
             "details": f"Exceção: {str(e)}"
         })
         return False, f"Erro na execução: {e}"
@@ -243,21 +217,21 @@ with st.expander("🔧 PROBLEMA DE AUTORIZAÇÃO RESOLVIDO", expanded=True):
         """)
 
 # ========== CONTROLE PRINCIPAL ==========
-st.markdown("## 🎯 Controle do Webhook1")
+st.markdown("## 🎯 Controle do Fluxo de Leads")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### 🚀 Executar Webhook1")
+    st.markdown("### 🚀 Iniciar Fluxo")
     st.info("""
     **Fluxo**: Webhook1 → Code → Google Sheets → If1 → Filter → Loop → Scraping → AI → Mensagens
     
-    **Função**: Processa leads, faz scraping dos sites, gera mensagens com AI e envia via WhatsApp
+    **Função**: Inicia o processamento dos leads que estão no Google Sheets
     """)
     
-    if st.button("🚀 EXECUTAR WEBHOOK1", type="primary", use_container_width=True):
-        with st.spinner("Executando Webhook1..."):
-            success, message = execute_webhook1()
+    if st.button("🚀 INICIAR FLUXO", type="primary", use_container_width=True):
+        with st.spinner("Iniciando fluxo..."):
+            success, message = iniciar_fluxo()
             if success:
                 st.success(f"✅ {message}")
                 st.balloons()
