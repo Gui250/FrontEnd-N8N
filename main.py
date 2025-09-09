@@ -969,15 +969,73 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
             st.success("Histórico limpo!")
             st.rerun()
 
+    st.markdown("**🔧 Diagnóstico de Conectividade:**")
+    
+    # Verificação automática do workflow
+    col_diag1, col_diag2 = st.columns(2)
+    with col_diag1:
+        if st.button("🔍 Verificar Status do Workflow"):
+            is_active, message = check_workflow_status()
+            if is_active is True:
+                st.success(f"✅ {message}")
+            elif is_active is False:
+                st.error(f"❌ {message}")
+                st.markdown("""
+                **🔧 Para ativar o workflow:**
+                1. 🔗 Acesse: https://projeto01-n8n.peitvn.easypanel.host
+                2. 📝 Abra o workflow
+                3. 🔄 Clique no toggle "Active" no canto superior direito
+                """)
+            else:
+                st.warning(f"⚠️ {message}")
+    
+    with col_diag2:
+        if st.button("🌐 Testar Conectividade Básica"):
+            try:
+                with st.spinner("Testando conectividade..."):
+                    import urllib.parse
+                    base_url = st.session_state.get("webhook_url", WEBHOOK_MAIN_URL).split("/webhook")[0]
+                    response = requests.get(base_url, timeout=10)
+                if response.status_code == 200:
+                    st.success("✅ Servidor n8n acessível")
+                else:
+                    st.warning(f"⚠️ Servidor respondeu com status: {response.status_code}")
+            except Exception as e:
+                st.error(f"❌ Erro de conectividade: {e}")
+    
     col_test1, col_test2, col_test3 = st.columns([1,1,1])
     with col_test1:
         timeout_val = st.number_input("Timeout (s)", min_value=5, max_value=120, value=30, step=5)
     with col_test2:
-        run_post = st.button("Testar POST")
+        run_post = st.button("🧪 Testar POST")
     with col_test3:
-        run_get = st.button("Testar GET")
+        run_get = st.button("🧪 Testar GET")
 
-    st.info("💡 **Dica**: O webhook apenas dispara o fluxo. O controle (iniciar/parar) é feito pelo Python.")
+    st.markdown("**🚨 Troubleshooting - Webhook não responde:**")
+    with st.expander("🔧 Principais causas e soluções"):
+        st.markdown("""
+        **1. ❌ Workflow inativo no n8n**
+        - ✅ Solução: Acesse o n8n e ative o workflow (toggle "Active")
+        
+        **2. 🔗 URL do webhook incorreta**
+        - ✅ Solução: Copie a Production URL do node Webhook no n8n
+        
+        **3. 🚫 Servidor n8n offline**
+        - ✅ Solução: Verifique se https://projeto01-n8n.peitvn.easypanel.host está acessível
+        
+        **4. ⚙️ Configuração do node Webhook**
+        - ✅ Verifique se está configurado como POST
+        - ✅ Verifique se "Respond" está ativo
+        - ✅ Verifique se "Response Mode" está correto
+        
+        **5. 🔑 Problemas de autenticação**
+        - ✅ Verifique se o workflow não tem autenticação extra
+        
+        **6. 🌐 Problemas de rede**
+        - ✅ Teste a conectividade básica acima
+        """)
+    
+    st.info("💡 **Dica**: Use os botões de diagnóstico acima para identificar o problema específico.")
     
     # Status de execução
     if "execution_start_time" in st.session_state:
@@ -1009,25 +1067,67 @@ with st.expander("⚙️ Configuração e Diagnóstico do Webhook", expanded=Fal
                     numero = str(test_payload[key])
                     break
             
+            st.info(f"🔗 **URL de destino**: {st.session_state['webhook_url']}")
+            st.info(f"📦 **Payload**: {json.dumps(test_payload, indent=2)}")
+            
             # Enviar sem validação de duplicatas
             with st.spinner("Enviando POST de teste..."):
+                start_time = time.time()
                 r = call_webhook(
                     st.session_state["webhook_url"], 
                     test_payload, 
                     timeout=int(timeout_val),
                     force_send=True  # Sempre forçar envio em testes
                 )
+                response_time = time.time() - start_time
+            
+            # Análise detalhada da resposta
+            st.write(f"**⏱️ Tempo de resposta**: {response_time:.2f}s")
+            st.write(f"**📊 Status HTTP**: {r.status_code}")
             
             if r.status_code == 200:
-                st.success("📤 Mensagem enviada com sucesso!")
+                st.success("✅ **Webhook respondeu com sucesso!**")
                 if numero:
-                    st.info(f"✅ Número {numero} registrado no histórico")
+                    st.info(f"📱 Número {numero} registrado no histórico")
+            elif r.status_code == 404:
+                st.error("❌ **Webhook não encontrado (404)**")
+                st.markdown("""
+                **Possíveis causas:**
+                - Workflow não está ativo no n8n
+                - URL do webhook está incorreta
+                - Webhook foi deletado ou modificado
+                """)
+            elif r.status_code == 500:
+                st.error("❌ **Erro interno do servidor (500)**")
+                st.warning("Pode haver um erro no workflow n8n")
+            else:
+                st.warning(f"⚠️ **Status inesperado**: {r.status_code}")
             
-            st.write(f"Status: {r.status_code}")
-            st.code((r.text or "" )[:1000])
+            # Mostrar resposta detalhada
+            if r.text:
+                st.markdown("**📄 Resposta do servidor:**")
+                st.code(r.text[:1000])
+            else:
+                st.info("📄 Servidor não retornou conteúdo")
             
+            # Mostrar headers de resposta
+            if r.headers:
+                with st.expander("🔍 Headers de resposta"):
+                    for key, value in r.headers.items():
+                        st.write(f"**{key}**: {value}")
+            
+        except requests.exceptions.ConnectTimeout:
+            st.error("❌ **Timeout de conexão**")
+            st.warning("O servidor n8n não está respondendo")
+        except requests.exceptions.ReadTimeout:
+            st.error("❌ **Timeout de leitura**")
+            st.warning("O webhook demorou muito para responder")
+        except requests.exceptions.ConnectionError:
+            st.error("❌ **Erro de conexão**")
+            st.warning("Não foi possível conectar ao servidor n8n")
         except Exception as e:
-            st.error(f"Erro no POST de teste: {e}")
+            st.error(f"❌ **Erro no POST de teste**: {e}")
+            st.info("💡 Verifique se o n8n está rodando e o workflow está ativo")
 
     if run_get and test_payload is not None:
         try:
