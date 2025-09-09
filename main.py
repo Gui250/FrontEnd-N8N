@@ -15,7 +15,8 @@ st.title("🔄 Controle do Fluxo n8n - Loop Inteligente")
 # Informações do workflow
 st.info(f"🎯 **Workflow alvo**: `{WORKFLOW_ID}` - Leads SDR AMAC | 🔗 [Abrir no n8n](https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID})")
 
-st.success("✨ **Para testar**: Abra a seção 'Configurações' abaixo e clique em 'EXECUTAR TESTE COMPLETO'")
+st.warning("⚠️ **Modo Webhook**: API Key com problema - funcionando apenas com webhook direto")
+st.success("✨ **Para testar**: Abra a seção 'Configurações' abaixo e clique em 'EXECUTAR VIA WEBHOOK'")
 
 # --- Inicialização do Estado ---
 def init_session_state():
@@ -152,55 +153,19 @@ def execute_workflow_run():
             "method": "Verificando status..."
         })
         
-        # 1. Primeiro verificar se workflow está ativo
-        is_active, status_msg = check_workflow_status()
-        
-        if is_active is False:
-            # Tentar ativar automaticamente
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "ACTIVATING_WORKFLOW",
-                "execution": execution_id
-            })
-            
-            success, msg = activate_workflow(activate=True)
-            if not success:
-                st.session_state["net_logs"].append({
-                    "when": time.strftime("%H:%M:%S"),
-                    "action": "ACTIVATION_FAILED",
-                    "execution": execution_id,
-                    "error": msg
-                })
-                return True  # Continuar tentando
-        
-        # 2. Tentar execução via API primeiro (mais confiável)
+        # 1. Pular verificação de status da API (com problema)
         st.session_state["net_logs"].append({
             "when": time.strftime("%H:%M:%S"),
-            "action": "EXECUTING_VIA_API",
-            "execution": execution_id
+            "action": "SKIPPING_API_CHECK",
+            "execution": execution_id,
+            "reason": "API Key com problema - usando webhook direto"
         })
         
-        api_success, api_result = execute_workflow_via_api()
-        
-        if api_success:
-            # Incrementar contador de execuções
-            st.session_state["loop_count"] += 1
-            
-            st.session_state["net_logs"].append({
-                "when": time.strftime("%H:%M:%S"),
-                "action": "WORKFLOW_COMPLETED",
-                "execution": execution_id,
-                "method": "API",
-                "status": "SUCCESS"
-            })
-            return True
-        
-        # 3. Se API falhar, tentar webhook como fallback
+        # 2. Ir direto para webhook (método confiável)
         st.session_state["net_logs"].append({
             "when": time.strftime("%H:%M:%S"),
-            "action": "FALLBACK_TO_WEBHOOK",
-            "execution": execution_id,
-            "api_error": str(api_result)[:100]
+            "action": "EXECUTING_VIA_WEBHOOK",
+            "execution": execution_id
         })
         
         payload = {
@@ -333,39 +298,35 @@ with st.expander("⚙️ Configurações", expanded=False):
     
     st.divider()
 
-    # Teste rápido principal
-    st.markdown("**🚀 TESTE COMPLETO DO WORKFLOW:**")
-    if st.button("🎯 EXECUTAR TESTE COMPLETO", type="primary", key="main_test"):
-        with st.spinner("Testando workflow completo..."):
-            # Verificar status
-            is_active, status_msg = check_workflow_status()
+    # Teste rápido principal - APENAS WEBHOOK
+    st.markdown("**🚀 TESTE DIRETO DO WEBHOOK:**")
+    if st.button("🎯 EXECUTAR VIA WEBHOOK", type="primary", key="main_test"):
+        with st.spinner("Testando webhook diretamente..."):
+            # Testar webhook diretamente (sem API)
+            test_payload = {
+                "timestamp": time.time(),
+                "trigger": "start_workflow",
+                "execution_id": 1,
+                "test": True
+            }
             
-            if is_active is True:
-                st.success("✅ Workflow está ATIVO!")
+            try:
+                response = call_webhook(st.session_state["webhook_url"], test_payload, timeout=30)
                 
-                # Tentar executar
-                success, result = execute_workflow_via_api()
-                if success:
-                    st.success("🎉 **WORKFLOW EXECUTADO COM SUCESSO!**")
+                if response.status_code == 200:
+                    st.success("🎉 **WEBHOOK FUNCIONANDO PERFEITAMENTE!**")
                     st.balloons()
-                    st.info("🎯 O workflow está processando os leads automaticamente")
+                    st.info("🎯 O webhook respondeu corretamente - workflow deve estar executando")
+                    st.json({"status": "success", "response": response.text[:200] if response.text else "OK"})
                 else:
-                    st.error(f"❌ Falha na execução: {result}")
-            elif is_active is False:
-                st.warning("⚠️ Workflow está INATIVO. Ativando...")
-                activate_success, activate_msg = activate_workflow(activate=True)
-                if activate_success:
-                    st.success("✅ Workflow ativado! Tentando executar...")
-                    success, result = execute_workflow_via_api()
-                    if success:
-                        st.success("🎉 **WORKFLOW ATIVADO E EXECUTADO!**")
-                        st.balloons()
-                    else:
-                        st.error(f"❌ Falha após ativação: {result}")
-                else:
-                    st.error(f"❌ Falha ao ativar: {activate_msg}")
-            else:
-                st.error(f"❌ Erro ao verificar status: {status_msg}")
+                    st.error(f"❌ Webhook retornou erro: {response.status_code}")
+                    st.code(response.text[:300] if response.text else "Sem resposta")
+                    
+            except Exception as e:
+                st.error(f"❌ Erro ao chamar webhook: {e}")
+    
+    st.warning("⚠️ **Modo Webhook**: API Key com problema, usando apenas webhook direto")
+    st.info("💡 **Como funciona**: Chama o webhook diretamente sem verificar status via API")
 
     st.divider()
     
@@ -462,6 +423,11 @@ if st.session_state.get("net_logs"):
             if action == "STARTING_WORKFLOW":
                 method = log.get("method", "")
                 st.info(f"🚀 {when} - Iniciando execução #{execution} - {method}")
+            elif action == "SKIPPING_API_CHECK":
+                reason = log.get("reason", "")
+                st.warning(f"⚠️ {when} - Pulando verificação API - {reason}")
+            elif action == "EXECUTING_VIA_WEBHOOK":
+                st.info(f"🔗 {when} - Executando via WEBHOOK - Execução #{execution}")
             elif action == "ACTIVATING_WORKFLOW":
                 st.warning(f"🔄 {when} - Ativando workflow para execução #{execution}")
             elif action == "ACTIVATION_FAILED":
