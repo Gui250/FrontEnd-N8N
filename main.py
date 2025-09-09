@@ -13,41 +13,8 @@ st.set_page_config(layout="wide", page_title="Controle n8n Loop", page_icon="⚙
 st.title("🔄 Controle do Fluxo n8n - Loop Inteligente")
 
 # Informações do workflow
-col_info1, col_info2 = st.columns([3, 1])
-with col_info1:
-    st.info(f"🎯 **Workflow alvo**: `{WORKFLOW_ID}` - Leads SDR AMAC")
-with col_info2:
-    if st.button("🚀 TESTE RÁPIDO", type="primary"):
-        with st.spinner("Testando workflow correto..."):
-            # Verificar status
-            is_active, status_msg = check_workflow_status()
-            
-            if is_active is True:
-                st.success("✅ Workflow está ATIVO!")
-                
-                # Tentar executar
-                success, result = execute_workflow_via_api()
-                if success:
-                    st.success("🎉 **WORKFLOW EXECUTADO COM SUCESSO!**")
-                    st.balloons()
-                    st.info("🎯 O workflow está processando os leads automaticamente")
-                else:
-                    st.error(f"❌ Falha na execução: {result}")
-            elif is_active is False:
-                st.warning("⚠️ Workflow está INATIVO. Ativando...")
-                activate_success, activate_msg = activate_workflow(activate=True)
-                if activate_success:
-                    st.success("✅ Workflow ativado! Tentando executar...")
-                    success, result = execute_workflow_via_api()
-                    if success:
-                        st.success("🎉 **WORKFLOW ATIVADO E EXECUTADO!**")
-                        st.balloons()
-                    else:
-                        st.error(f"❌ Falha após ativação: {result}")
-                else:
-                    st.error(f"❌ Falha ao ativar: {activate_msg}")
-            else:
-                st.error(f"❌ Erro ao verificar status: {status_msg}")
+st.info(f"🎯 **Workflow alvo**: `{WORKFLOW_ID}` - Leads SDR AMAC | 🔗 [Abrir no n8n](https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID})")
+st.success("✨ **Para testar**: Abra a seção 'Configurações' abaixo e clique em 'EXECUTAR TESTE COMPLETO'")
 
 # --- Inicialização do Estado ---
 def init_session_state():
@@ -362,8 +329,44 @@ with st.expander("⚙️ Configurações", expanded=False):
         help="URL do webhook que iniciará o workflow completo no n8n"
     )
 
+    # Teste rápido principal
+    st.markdown("**🚀 TESTE COMPLETO DO WORKFLOW:**")
+    if st.button("🎯 EXECUTAR TESTE COMPLETO", type="primary", key="main_test"):
+        with st.spinner("Testando workflow completo..."):
+            # Verificar status
+            is_active, status_msg = check_workflow_status()
+            
+            if is_active is True:
+                st.success("✅ Workflow está ATIVO!")
+                
+                # Tentar executar
+                success, result = execute_workflow_via_api()
+                if success:
+                    st.success("🎉 **WORKFLOW EXECUTADO COM SUCESSO!**")
+                    st.balloons()
+                    st.info("🎯 O workflow está processando os leads automaticamente")
+                else:
+                    st.error(f"❌ Falha na execução: {result}")
+            elif is_active is False:
+                st.warning("⚠️ Workflow está INATIVO. Ativando...")
+                activate_success, activate_msg = activate_workflow(activate=True)
+                if activate_success:
+                    st.success("✅ Workflow ativado! Tentando executar...")
+                    success, result = execute_workflow_via_api()
+                    if success:
+                        st.success("🎉 **WORKFLOW ATIVADO E EXECUTADO!**")
+                        st.balloons()
+                    else:
+                        st.error(f"❌ Falha após ativação: {result}")
+                else:
+                    st.error(f"❌ Falha ao ativar: {activate_msg}")
+            else:
+                st.error(f"❌ Erro ao verificar status: {status_msg}")
+
+    st.divider()
+    
     # Diagnóstico completo
-    st.markdown("**🔍 Diagnóstico e Controle:**")
+    st.markdown("**🔍 Diagnóstico Detalhado:**")
     
     col_diag1, col_diag2, col_diag3 = st.columns(3)
     
