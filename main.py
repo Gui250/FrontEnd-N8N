@@ -5,7 +5,7 @@ from requests.exceptions import ReadTimeout, ConnectionError
 
 # ========== CONFIGURAÇÕES CORRETAS ==========
 # Webhooks corretos extraídos do JSON do workflow
-WEBHOOK_LEADS = "https://projeto01-n8n.peitvn.easypanel.host/webhook/ce723d0d-a280-414f-aec3-85c940f7dc6f"  # Webhook1 - Leads
+WEBHOOK_LEADS = "https://projeto01-n8n.peitvn.easypanel.host/webhook/b877c4b1-4eb2-475f-aead-117d6d89614c"  # Webhook1 - Leads
 WEBHOOK_EXTRATOR = "https://projeto01-n8n.peitvn.easypanel.host/webhook/c350dfad-ce64-4535-b806-905c72ecef28"  # Webhook - Extrator
 WORKFLOW_ID = "D2c8LMH4Fq8JT6CQ"  # ID correto do JSON
 N8N_BASE_URL = "https://projeto01-n8n.peitvn.easypanel.host"
