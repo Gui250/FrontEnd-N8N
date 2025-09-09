@@ -158,6 +158,13 @@ def execute_webhook1():
                 "details": f"Workflow executado com sucesso! Status: {response.status_code}"
             })
             return True, "Webhook1 executado com sucesso! O workflow está processando os dados."
+        elif response.status_code == 404:
+            st.session_state["operation_logs"].append({
+                "timestamp": time.strftime("%H:%M:%S"),
+                "action": "❌ WEBHOOK1_NOT_ACTIVE",
+                "details": "Workflow não está ativo - erro 404"
+            })
+            return False, "WORKFLOW NÃO ESTÁ ATIVO! Você precisa ativar o workflow no n8n primeiro."
         else:
             st.session_state["operation_logs"].append({
                 "timestamp": time.strftime("%H:%M:%S"),
@@ -188,6 +195,30 @@ st.title("🚀 Controle do Webhook1 - AMAC Leads")
 
 # Informações do workflow
 st.info(f"🎯 **Workflow ID**: `{WORKFLOW_ID}` | 🔗 [Abrir no n8n]({N8N_BASE_URL}/workflow/{WORKFLOW_ID})")
+
+# Verificação automática do status do workflow
+def check_workflow_status_display():
+    """Verifica e exibe o status do workflow."""
+    try:
+        test_payload = {"status_check": True, "timestamp": time.time()}
+        response = requests.post(WEBHOOK_LEADS, json=test_payload, timeout=5)
+        
+        if response.status_code == 200:
+            st.success("✅ **WORKFLOW ATIVO** - Pronto para processar leads!")
+            return True
+        elif response.status_code == 404:
+            st.error("🚨 **WORKFLOW INATIVO** - Você precisa ativar o workflow no n8n!")
+            st.error("👆 **CLIQUE NO LINK ACIMA** para abrir o n8n e ativar o workflow")
+            return False
+        else:
+            st.warning(f"⚠️ **STATUS INCERTO** - Webhook retornou {response.status_code}")
+            return False
+    except:
+        st.warning("⚠️ **NÃO FOI POSSÍVEL VERIFICAR** - Teste manualmente abaixo")
+        return False
+
+# Verificar status automaticamente
+workflow_active = check_workflow_status_display()
 
 # ========== PROBLEMA DA API RESOLVIDO ==========
 with st.expander("🔧 PROBLEMA DE AUTORIZAÇÃO RESOLVIDO", expanded=True):
@@ -232,13 +263,15 @@ with col1:
                 st.balloons()
             else:
                 st.error(f"❌ {message}")
+                if "NÃO ESTÁ ATIVO" in message:
+                    show_activation_instructions()
 
 with col2:
     st.markdown("### 🔍 Testar Conectividade")
     st.info("""
     **Teste**: Verifica se o Webhook1 está respondendo corretamente
     
-    **Resultado**: Status 200 = OK, outros = problema
+    **Resultado**: Status 200 = OK, Status 404 = Workflow inativo
     """)
     
     if st.button("🔍 TESTAR WEBHOOK1", type="secondary", use_container_width=True):
