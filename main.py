@@ -7,6 +7,32 @@ from requests.exceptions import ReadTimeout
 WEBHOOK_MAIN_URL = "https://projeto01-n8n.peitvn.easypanel.host/webhook/b877c4b1-4eb2-475f-aead-117d6d89614c"
 WORKFLOW_ID = "5w9w7VyDWF2d4V7c"  # Workflow ID correto extraído da URL
 N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWM4YTg2Zi1iZDc3LTRjZTYtYjJmYS1mM2Q3MGZhNzJkOWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU3NDM2ODYwfQ.EcLw5O_-m3jQuZ1TS7mwthh6yxV_6AsZbmARYAHDu-Q"
+
+# Funções auxiliares (definidas antes do uso)
+def call_webhook(url, payload=None, timeout=30):
+    """Chama o webhook com o payload."""
+    try:
+        response = requests.post(url, json=(payload or {}), timeout=timeout)
+        
+        # Log da tentativa se session_state existir
+        if "net_logs" in st.session_state:
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "POST",
+                "status": response.status_code,
+                "payload": payload,
+                "response_preview": response.text[:100] if response.text else "No response"
+            })
+        
+        return response
+    except Exception as e:
+        if "net_logs" in st.session_state:
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "ERROR",
+                "error": str(e)
+            })
+        raise e
 N8N_BASE_URL = "https://projeto01-n8n.peitvn.easypanel.host"
 
 st.set_page_config(layout="wide", page_title="Controle n8n Loop", page_icon="⚙️")
@@ -16,7 +42,33 @@ st.title("🔄 Controle do Fluxo n8n - Loop Inteligente")
 st.info(f"🎯 **Workflow alvo**: `{WORKFLOW_ID}` - Leads SDR AMAC | 🔗 [Abrir no n8n](https://projeto01-n8n.peitvn.easypanel.host/workflow/{WORKFLOW_ID})")
 
 st.warning("⚠️ **Modo Webhook**: API Key com problema - funcionando apenas com webhook direto")
-st.success("✨ **Para testar**: Abra a seção 'Configurações' abaixo e clique em 'EXECUTAR VIA WEBHOOK'")
+
+# Teste rápido no topo
+col_test1, col_test2 = st.columns([2, 1])
+with col_test1:
+    st.success("✨ **Teste rápido**: Clique no botão ao lado para verificar se webhook funciona")
+with col_test2:
+    if st.button("🧪 TESTE RÁPIDO", type="secondary"):
+        with st.spinner("Testando webhook..."):
+            test_payload = {
+                "timestamp": time.time(),
+                "trigger": "quick_test",
+                "test": True
+            }
+            
+            try:
+                response = call_webhook(WEBHOOK_MAIN_URL, test_payload, timeout=15)
+                
+                if response.status_code == 200:
+                    st.success("✅ **WEBHOOK OK!** Pode iniciar o fluxo")
+                    st.balloons()
+                else:
+                    st.error(f"❌ Webhook erro {response.status_code}")
+                    st.code(response.text[:200] if response.text else "Sem resposta")
+                    
+            except Exception as e:
+                st.error(f"❌ Falha: {e}")
+                st.warning("🔧 Verifique se o n8n está online e o workflow ativo")
 
 # --- Inicialização do Estado ---
 def init_session_state():
@@ -115,27 +167,53 @@ def execute_workflow_via_api():
     except Exception as e:
         return False, f"Erro na execução: {e}"
 
-def call_webhook(url, payload=None, timeout=30):
-    """Chama o webhook com o payload."""
+def test_webhook_connection(url):
+    """Testa a conectividade do webhook com diagnóstico detalhado."""
+    st.info("🔍 Testando conectividade do webhook...")
+    
     try:
-        response = requests.post(url, json=(payload or {}), timeout=timeout)
+        # Teste 1: Verificar se URL é válida
+        st.write("**1. Verificando URL...**")
+        if not url or not url.startswith("http"):
+            st.error("❌ URL inválida ou vazia")
+            return False
+        st.success(f"✅ URL válida: {url}")
         
-        # Log da tentativa
-        st.session_state["net_logs"].append({
-            "when": time.strftime("%H:%M:%S"),
-            "action": "POST",
-            "status": response.status_code,
-            "payload": payload
-        })
+        # Teste 2: Testar conexão básica
+        st.write("**2. Testando conexão...**")
+        test_payload = {"test": True, "timestamp": time.time()}
         
-        return response
+        response = requests.post(url, json=test_payload, timeout=10)
+        
+        st.write(f"**Status Code:** {response.status_code}")
+        st.write(f"**Response:** {response.text[:200]}...")
+        
+        if response.status_code == 200:
+            st.success("✅ Webhook respondeu com sucesso!")
+            return True
+        elif response.status_code == 404:
+            st.error("❌ Webhook não encontrado (404) - Verifique se o workflow está ativo!")
+            st.markdown("""
+            **Para ativar o workflow:**
+            1. Acesse: https://projeto01-n8n.peitvn.easypanel.host
+            2. Abra seu workflow
+            3. Clique no toggle "Active" no canto superior direito
+            """)
+            return False
+        else:
+            st.warning(f"⚠️ Webhook respondeu com status {response.status_code}")
+            return False
+            
+    except requests.exceptions.Timeout:
+        st.error("❌ Timeout - Webhook não respondeu em 10 segundos")
+        return False
+    except requests.exceptions.ConnectionError:
+        st.error("❌ Erro de conexão - Verifique se o n8n está online")
+        return False
     except Exception as e:
-        st.session_state["net_logs"].append({
-            "when": time.strftime("%H:%M:%S"),
-            "action": "ERROR",
-            "error": str(e)
-        })
-        raise e
+        st.error(f"❌ Erro inesperado: {e}")
+        return False
+
 
 def execute_workflow_run():
     """Executa uma rodada completa do workflow com verificação robusta."""
@@ -297,6 +375,33 @@ with st.expander("⚙️ Configurações", expanded=False):
     )
     
     st.divider()
+    
+    # Diagnóstico do webhook
+    st.markdown("**🔍 DIAGNÓSTICO DO WEBHOOK:**")
+    col_diag1, col_diag2 = st.columns(2)
+    
+    with col_diag1:
+        if st.button("🔍 Testar Conectividade", key="test_connectivity"):
+            test_webhook_connection(st.session_state["webhook_url"])
+    
+    with col_diag2:
+        if st.button("🎯 Executar Teste Simples", key="simple_test"):
+            try:
+                test_payload = {"timestamp": time.time(), "trigger": "connectivity_test"}
+                with st.spinner("Testando..."):
+                    response = call_webhook(st.session_state["webhook_url"], test_payload, timeout=15)
+                
+                if response.status_code == 200:
+                    st.success(f"✅ Sucesso! Status: {response.status_code}")
+                    st.code(response.text[:300])
+                else:
+                    st.error(f"❌ Erro: {response.status_code}")
+                    st.code(response.text[:300])
+                    
+            except Exception as e:
+                st.error(f"❌ Erro na execução: {e}")
+
+    st.divider()
 
     # Teste rápido principal - APENAS WEBHOOK
     st.markdown("**🚀 TESTE DIRETO DO WEBHOOK:**")
@@ -448,32 +553,101 @@ if st.session_state.get("net_logs"):
                     st.caption(f"Detalhes: {log['error']}")
             elif action == "EXECUTION_EXCEPTION":
                 st.error(f"🚨 {when} - Exceção na execução #{execution}: {log.get('error', 'Erro desconhecido')}")
+            elif action == "LOOP_EXECUTION":
+                st.info(f"🔄 {when} - Executando loop #{execution}")
+            elif action == "LOOP_SUCCESS":
+                status = log.get("status", "")
+                st.success(f"✅ {when} - Loop #{execution} executado com sucesso - Status: {status}")
+            elif action == "LOOP_ERROR":
+                status = log.get("status", "")
+                st.error(f"❌ {when} - Loop #{execution} com erro - Status: {status}")
+                if log.get("error"):
+                    st.caption(f"Detalhes: {log['error']}")
+            elif action == "LOOP_EXCEPTION":
+                st.error(f"🚨 {when} - Exceção no loop: {log.get('error', 'Erro desconhecido')}")
             elif action == "POST":
                 st.write(f"🔗 {when} - HTTP {log.get('status', '?')} - Trigger enviado")
         
         # Estatísticas rápidas
         if len(recent_logs) > 0:
-            success_count = len([l for l in recent_logs if l.get("action") == "WORKFLOW_COMPLETED"])
-            error_count = len([l for l in recent_logs if l.get("action") == "WORKFLOW_ERROR"])
-            api_count = len([l for l in recent_logs if l.get("method") == "API"])
-            webhook_count = len([l for l in recent_logs if l.get("method") == "WEBHOOK"])
-            st.caption(f"📊 Últimas execuções: {success_count} sucessos, {error_count} erros | API: {api_count}, Webhook: {webhook_count}")
+            success_count = len([l for l in recent_logs if l.get("action") in ["WORKFLOW_COMPLETED", "LOOP_SUCCESS"]])
+            error_count = len([l for l in recent_logs if l.get("action") in ["WORKFLOW_ERROR", "LOOP_ERROR"]])
+            loop_count = len([l for l in recent_logs if l.get("action") == "LOOP_EXECUTION"])
+            st.caption(f"📊 Últimas execuções: {success_count} sucessos, {error_count} erros | {loop_count} loops executados")
 
-# Lógica de execução automática - workflow completo
+# Lógica de execução automática - SIMPLIFICADA
 if st.session_state.get("loop_active", False):
     current_time = time.time()
     last_execution = st.session_state.get("last_loop_execution", 0)
-    loop_delay = st.session_state.get("loop_delay", 60)  # Padrão 60s entre execuções
+    loop_delay = st.session_state.get("loop_delay", 60)
     
     if current_time - last_execution >= loop_delay:
-        # Executar workflow completo
-        continue_execution = execute_workflow_run()
-        st.session_state["last_loop_execution"] = current_time
-        
-        if not continue_execution:
-            st.session_state["loop_active"] = False
-            st.session_state["status"] = "Parado"
+        # Executar webhook diretamente (método simples)
+        try:
+            execution_id = st.session_state.get("loop_count", 0) + 1
+            
+            # Log de início
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "LOOP_EXECUTION",
+                "execution": execution_id
+            })
+            
+            # Payload simples
+            payload = {
+                "timestamp": time.time(),
+                "trigger": "loop_execution",
+                "execution_id": execution_id
+            }
+            
+            # Chamar webhook
+            response = call_webhook(st.session_state["webhook_url"], payload, timeout=30)
+            
+            # Atualizar contador
+            st.session_state["loop_count"] = execution_id
+            st.session_state["last_loop_execution"] = current_time
+            
+            # Log do resultado
+            if response.status_code == 200:
+                st.session_state["net_logs"].append({
+                    "when": time.strftime("%H:%M:%S"),
+                    "action": "LOOP_SUCCESS",
+                    "execution": execution_id,
+                    "status": response.status_code
+                })
+            else:
+                st.session_state["net_logs"].append({
+                    "when": time.strftime("%H:%M:%S"),
+                    "action": "LOOP_ERROR",
+                    "execution": execution_id,
+                    "status": response.status_code,
+                    "error": response.text[:100]
+                })
+            
+            # Log de resultado
+            if response.status_code == 200:
+                st.session_state["net_logs"].append({
+                    "when": time.strftime("%H:%M:%S"),
+                    "action": "LOOP_SUCCESS",
+                    "execution": execution_id,
+                    "status": response.status_code
+                })
+            else:
+                st.session_state["net_logs"].append({
+                    "when": time.strftime("%H:%M:%S"),
+                    "action": "LOOP_ERROR",
+                    "execution": execution_id,
+                    "status": response.status_code,
+                    "error": response.text[:100]
+                })
+                
+        except Exception as e:
+            st.session_state["net_logs"].append({
+                "when": time.strftime("%H:%M:%S"),
+                "action": "LOOP_EXCEPTION",
+                "error": str(e)
+            })
     
-    # Auto-refresh mais suave para execuções completas
-    time.sleep(2)
+    # Auto-refresh
+    time.sleep(1)
     st.rerun()
